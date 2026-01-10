@@ -120,6 +120,12 @@ export default function Home() {
                 &copy; {new Date().getFullYear()} SnowForge
               </p>
               <div className="flex gap-6">
+                <a href="/privacy" className="hover:text-zinc-300 transition-colors">
+                  Privacy
+                </a>
+                <a href="/terms" className="hover:text-zinc-300 transition-colors">
+                  Terms
+                </a>
                 <a href="https://alexdiaz.me" className="hover:text-zinc-300 transition-colors">
                   Portfolio
                 </a>
