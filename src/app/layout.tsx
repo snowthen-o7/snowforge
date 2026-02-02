@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 export const metadata: Metadata = {
   title: 'SnowForge — Developer Tools',
@@ -20,8 +21,9 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="antialiased bg-background text-zinc-50">
+    <html lang="en">
+      <body className="antialiased">
+        <ThemeToggle />
         {children}
       </body>
     </html>
