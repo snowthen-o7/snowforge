@@ -8,7 +8,7 @@ SnowForge is a collection of powerful tools:
 - **SnowScrape**: Serverless web scraping automation
 - **SnowGen**: AI-powered content generation
 - **SnowGlobe**: Lead generation and outreach intelligence
-- **LoL Analytics**: League of Legends performance insights
+- **SnowPipe**: Data pipeline management for e-commerce
 
 ## Tech Stack
 
