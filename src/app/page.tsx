@@ -2,6 +2,9 @@ import { Hero } from '@/components/landing/Hero'
 import { MeetAlex } from '@/components/landing/MeetAlex'
 import { WhySnowForge } from '@/components/landing/WhySnowForge'
 import { FeaturedApp } from '@/components/landing/FeaturedApp'
+import { AppGrid } from '@/components/landing/AppGrid'
+import { Faq } from '@/components/landing/Faq'
+import { LandingFooter } from '@/components/landing/LandingFooter'
 
 export default function Home() {
   return (
@@ -16,6 +19,9 @@ export default function Home() {
         ctaText="Try SnowPipe →"
         monogramLetter="S"
       />
+      <AppGrid />
+      <Faq />
+      <LandingFooter />
     </main>
   )
 }
