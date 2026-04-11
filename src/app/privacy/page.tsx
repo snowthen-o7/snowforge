@@ -3,7 +3,7 @@ export default function PrivacyPolicy() {
     <div className="max-w-4xl mx-auto py-16 px-4 sm:px-6 lg:px-8">
       <header className="mb-12">
         <h1 className="text-4xl font-bold text-foreground mb-2">Privacy Policy</h1>
-        <p className="text-foreground/80-foreground">Last updated: January 2025</p>
+        <p className="text-muted-foreground">Last updated: January 2025</p>
       </header>
 
       <div className="prose prose-lg max-w-none space-y-8">
