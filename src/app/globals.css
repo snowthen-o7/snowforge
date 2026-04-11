@@ -1,30 +1,83 @@
 @import "tailwindcss";
 
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-background: rgb(var(--background));
+  --color-foreground: rgb(var(--foreground));
+  --color-surface: rgb(var(--surface));
+  --color-surface-elevated: rgb(var(--surface-elevated));
+  --color-border: rgb(var(--border));
+  --color-border-hover: rgb(var(--border-hover));
+  --color-muted: rgb(var(--muted));
+  --color-muted-foreground: rgb(var(--muted-foreground));
+  --color-ink-dim: rgb(var(--ink-dim));
+  --color-accent: rgb(var(--accent));
+  --color-accent-foreground: rgb(var(--accent-foreground));
+  --color-warmth-start: rgb(var(--warmth-start));
+  --color-warmth-end: rgb(var(--warmth-end));
+  --color-warmth-border: rgb(var(--warmth-border));
+  --color-ice: rgb(var(--ice));
+}
+
 @layer base {
   :root {
-    --background: 255 255 255;
-    --foreground: 9 9 11;
-    --surface: 244 244 245;
-    --surface-elevated: 255 255 255;
-    --border: 228 228 231;
-    --border-hover: 161 161 170;
-    --muted: 244 244 245;
-    --muted-foreground: 113 113 122;
-    --accent: 59 130 246;
+    /* Light mode: fresh snowfall morning */
+    --background: 248 250 252;          /* slate-50 */
+    --foreground: 15 23 42;             /* slate-900 */
+    --surface: 255 255 255;             /* white */
+    --surface-elevated: 250 250 250;    /* slightly off-white for alt bands */
+    --border: 226 232 240;              /* slate-200 */
+    --border-hover: 203 213 225;        /* slate-300 */
+    --muted: 238 242 247;               /* cool slate tint (hero gradient stop) */
+    --muted-foreground: 71 85 105;      /* slate-600 */
+    --ink-dim: 100 116 139;             /* slate-500 */
+    --accent: 249 115 22;               /* orange-500 */
     --accent-foreground: 255 255 255;
+
+    /* Warmth gradient (identical in both modes) */
+    --warmth-start: 251 146 60;         /* orange-400 */
+    --warmth-end: 244 63 94;            /* rose-500 */
+
+    /* Soft warmth used as tint/background */
+    --warmth-soft: 255 247 237;         /* orange-50 solid equivalent */
+    --warmth-soft-alpha: rgba(255, 247, 237, 1);
+    --warmth-border: 254 215 170;       /* orange-200 */
+
+    /* Ice highlight (identical both modes) */
+    --ice: 125 211 252;                 /* sky-300 */
+
+    /* Non-rgb helpers (used directly via var()) */
+    --snow-dot-color: rgba(148, 163, 184, 0.30);
+    --glow-color: rgba(251, 146, 60, 0.14);
   }
 
   .dark {
-    --background: 9 9 11;
-    --foreground: 250 250 250;
-    --surface: 24 24 27;
-    --surface-elevated: 39 39 42;
-    --border: 39 39 42;
-    --border-hover: 82 82 91;
-    --muted: 39 39 42;
-    --muted-foreground: 161 161 170;
-    --accent: 96 165 250;
-    --accent-foreground: 9 9 11;
+    /* Dark mode: deep winter night */
+    --background: 11 17 32;             /* deep slate */
+    --foreground: 248 250 252;          /* slate-50 */
+    --surface: 17 24 39;                /* gray-900 */
+    --surface-elevated: 15 23 42;       /* slate-900 */
+    --border: 30 41 59;                 /* slate-800 */
+    --border-hover: 51 65 85;           /* slate-700 */
+    --muted: 15 23 42;                  /* slate-900 */
+    --muted-foreground: 203 213 225;    /* slate-300 */
+    --ink-dim: 148 163 184;             /* slate-400 */
+    --accent: 251 146 60;               /* orange-400 */
+    --accent-foreground: 15 23 42;
+
+    /* Warmth gradient identical */
+    --warmth-start: 251 146 60;
+    --warmth-end: 244 63 94;
+
+    /* Warmth soft is a low-alpha overlay in dark mode */
+    --warmth-soft-alpha: rgba(251, 146, 60, 0.08);
+    --warmth-border: 251 146 60;        /* rendered with alpha by consumers */
+
+    --ice: 125 211 252;
+
+    --snow-dot-color: rgba(148, 163, 184, 0.18);
+    --glow-color: rgba(251, 146, 60, 0.10);
   }
 
   body {
