@@ -249,7 +249,7 @@ export default function PrivacyPolicy() {
 
         {/* Children's Privacy */}
         <section>
-          <h2 className="text-2xl font-semibold text-foreground mb-4">8. Children's Privacy</h2>
+          <h2 className="text-2xl font-semibold text-foreground mb-4">8. Children&apos;s Privacy</h2>
           <p className="text-foreground/80 leading-relaxed mb-4">
             Our Service is not intended for children under the age of 18. We do not knowingly collect personal
             information from children. If you are a parent or guardian and believe your child has provided us
@@ -290,7 +290,7 @@ export default function PrivacyPolicy() {
             operational, or regulatory reasons. When we make changes:
           </p>
           <ul className="list-disc pl-6 text-foreground/80 space-y-2 mb-4">
-            <li>We will update the "Last updated" date at the top of this page</li>
+            <li>We will update the &ldquo;Last updated&rdquo; date at the top of this page</li>
             <li>For material changes, we will notify you via email or prominent notice on our Service</li>
             <li>We will provide the previous version for comparison when possible</li>
           </ul>

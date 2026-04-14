@@ -12,7 +12,7 @@ export default function TermsOfService() {
           <h2 className="text-2xl font-semibold text-foreground mb-4">1. Acceptance of Terms</h2>
           <p className="text-foreground/80 leading-relaxed mb-4">
             Welcome to SnowForge. By accessing or using our website, applications, or any of our services
-            (collectively, the "Service"), you agree to be bound by these Terms of Service ("Terms"). If you do not
+            (collectively, the &ldquo;Service&rdquo;), you agree to be bound by these Terms of Service (&ldquo;Terms&rdquo;). If you do not
             agree to these Terms, please do not use our Service.
           </p>
           <p className="text-foreground/80 leading-relaxed">
@@ -103,7 +103,7 @@ export default function TermsOfService() {
           </p>
           <ul className="list-disc pl-6 text-foreground/80 space-y-2 mb-4">
             <li>Authorize us to access necessary information and perform actions on your behalf</li>
-            <li>Agree to comply with each platform's terms of service and community guidelines</li>
+            <li>Agree to comply with each platform&apos;s terms of service and community guidelines</li>
             <li>Acknowledge that we are not responsible for any actions taken by these platforms</li>
             <li>Understand that platform availability and features may change without notice</li>
           </ul>
@@ -118,7 +118,7 @@ export default function TermsOfService() {
           <h2 className="text-2xl font-semibold text-foreground mb-4">5. Content Ownership</h2>
           <p className="text-foreground/80 leading-relaxed mb-4">
             <strong>Your Content:</strong> You retain ownership of any content you create, upload, or input into our
-            Service ("User Content"). By using our Service, you grant us a non-exclusive, worldwide, royalty-free
+            Service (&ldquo;User Content&rdquo;). By using our Service, you grant us a non-exclusive, worldwide, royalty-free
             license to use, reproduce, modify, and display your User Content solely for the purpose of providing
             and improving our Service.
           </p>
@@ -154,7 +154,7 @@ export default function TermsOfService() {
             <li>Engage in spamming, including mass unsolicited messaging or automated posting that violates platform guidelines</li>
             <li>Impersonate any person or entity or misrepresent your affiliation</li>
             <li>Use the Service to harass, abuse, or harm others</li>
-            <li>Attempt to gain unauthorized access to our systems or other users' accounts</li>
+            <li>Attempt to gain unauthorized access to our systems or other users&apos; accounts</li>
             <li>Upload malware, viruses, or other malicious code</li>
             <li>Use automated tools to access our Service in a manner that violates these Terms or causes harm</li>
             <li>Circumvent any security or authentication measures</li>
@@ -210,7 +210,7 @@ export default function TermsOfService() {
             shall not exceed the amount you paid to us in the twelve (12) months preceding the claim.
           </p>
           <p className="text-foreground/80 leading-relaxed">
-            THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR
+            THE SERVICE IS PROVIDED &ldquo;AS IS&rdquo; AND &ldquo;AS AVAILABLE&rdquo; WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR
             IMPLIED, INCLUDING BUT NOT LIMITED TO IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
             PURPOSE, AND NON-INFRINGEMENT.
           </p>
@@ -247,7 +247,7 @@ export default function TermsOfService() {
             We reserve the right to modify these Terms at any time. When we make changes, we will:
           </p>
           <ul className="list-disc pl-6 text-foreground/80 space-y-2 mb-4">
-            <li>Update the "Last updated" date at the top of this page</li>
+            <li>Update the &ldquo;Last updated&rdquo; date at the top of this page</li>
             <li>Notify you via email or through the Service for material changes</li>
             <li>Provide reasonable notice before changes take effect</li>
           </ul>
