@@ -28,7 +28,7 @@ Cold traffic arriving from blog posts, social, search, or SEO should come away u
 
 ## Non-Goals
 
-- Real logo design for all seven apps. The landing page ships with monogram marks for now. Real logos are a future project.
+- Real logo design for all seven apps. The landing page ships with Lucide icon marks inside colored tiles for now. Real logos are a future project.
 - Unified design system refactor across sister apps. This spec changes only the SnowForge marketing site.
 - Blog, newsletter, or CMS. Static page only.
 - i18n. English only for this iteration.
@@ -73,13 +73,13 @@ Core palette:
 Typography:
 
 - Body: Inter (already in Next.js default stack or add via `next/font/google`).
-- Display headlines: Fraunces, weight 500, slight negative letter spacing. Used for hero headline, section titles, Meet Alex name, and the letter inside monogram marks. Load via `next/font/google`.
+- Display headlines: Fraunces, weight 500, slight negative letter spacing. Used for hero headline, section titles, and Meet Alex name. Load via `next/font/google`.
 - Monospace: Geist Mono or the existing default for the small uppercase `label-tag` style.
 
 Motifs:
 
 - Hero background carries a subtle pattern of small gray dots that evoke falling snow without animation.
-- A single static snowflake glyph sits in the top right of the hero at low opacity. One flake only.
+- A single static snowflake glyph sits in the top left of the hero at low opacity. One flake only. (Left rather than right so it stays clear of the floating theme toggle.)
 - Hero has a warm radial glow in the bottom left using the warmth gradient at low alpha. This offsets the cool background tone.
 - Footer signs off with a tiny snowflake glyph next to the attribution line.
 
@@ -119,7 +119,7 @@ Each section below gets its own subsection with approved copy and layout notes.
 
 ### 1. Hero
 
-**Layout:** Centered column, max width ~640px for the headline, left aligned text inside the column. Subtle snow dot background pattern, warm glow bottom left, snowflake glyph top right.
+**Layout:** Centered column, max width ~640px for the headline, left aligned text inside the column. Subtle snow dot background pattern, warm glow bottom left, snowflake glyph top left.
 
 **Badge:** Pill with small orange-to-rose gradient avatar dot on the left.
 > Hi, I'm Alex. Solo founder, indie studio.
@@ -199,7 +199,7 @@ The phrase *big care* is italicized and rendered with the warmth gradient.
 
 **CTA:** "Try SnowPipe →" (links to `https://pipe.snowforge.dev`)
 
-**Monogram tile:** 140px rounded square, warmth gradient background, Fraunces capital "S" in white.
+**Monogram tile:** 140px rounded square, warmth gradient background, `Workflow` Lucide icon in white (the icon assigned to SnowPipe in `apps.ts`).
 
 ---
 
@@ -213,7 +213,7 @@ The phrase *big care* is italicized and rendered with the warmth gradient.
 **Card treatment:**
 - White surface with `--border` outline.
 - 2px top accent bar in the app color.
-- Monogram mark (48px rounded square, first letter of app name in Fraunces, app color background).
+- Monogram mark (44px rounded square, Lucide icon assigned to the app in `apps.ts`, app color background).
 - App name in bold 15px.
 - Description in 12px `--ink-dim`.
 - "Launch →" link in the bottom.
@@ -229,9 +229,9 @@ The phrase *big care* is italicized and rendered with the warmth gradient.
 | SnowGlobe | `#10b981` emerald-500 | https://globe.snowforge.dev | Lead gen intelligence across Reddit, HN, and RSS. |
 | SnowFort | `#f43f5e` rose-500 | https://fort.snowforge.dev | Fortnite item shop tracker with alerts and 17,000+ cosmetics. |
 | TrueIce | `#06b6d4` cyan-500 | https://trueice.snowforge.dev | Advanced League of Legends match history and analytics. |
-| SnowSports | `#0ea5e9` sky-500 | https://sports.snowforge.dev | Sports analytics and data visualization for stats driven fans. **Coming soon.** |
+| SnowSports | `#0ea5e9` sky-500 | https://sports.snowforge.dev | Sports analytics and data visualization for stats driven fans. |
 
-SnowSports renders at reduced opacity (0.6) with a "SOON" pill and no launch link.
+All seven apps render as live, clickable cards. The `comingSoon` field on `AppEntry` stays in the schema so future apps can be added as placeholders before launch, but no apps currently use it. (Historical note: SnowSports originally shipped behind a "SOON" pill; the flag was removed on 2026-04-14 when the app went live.)
 
 ---
 
@@ -286,7 +286,7 @@ Propose the following components under `src/components/landing/`:
 - `AppGrid.tsx` plus a local `AppCard` subcomponent
 - `Faq.tsx` plus a local `FaqItem` subcomponent
 - `LandingFooter.tsx`
-- `Monogram.tsx` reusable monogram mark (props: letter, color, size)
+- `Monogram.tsx` reusable monogram mark (props: `icon` or `letter`, `color`, `size`, `warmthGradient`). Prefers `icon` (Lucide) when both are provided.
 - `SnowDotBackground.tsx` reusable background pattern (for hero and why section)
 
 `src/app/page.tsx` becomes thin: imports and composes the above in order.
@@ -321,7 +321,7 @@ The page is fully static. No API calls, no client state beyond scroll behavior f
 
 - All interactive elements reachable by keyboard.
 - Hero CTAs are `<a>` elements with `href` anchors to section IDs.
-- Tool grid cards are `<a>` elements. The SnowSports card is a `<div>` with `aria-disabled`.
+- Tool grid cards are `<a>` elements. Any card whose `AppEntry.comingSoon` flag is true renders as a `<div>` with `aria-disabled` instead. No apps currently use this flag.
 - Color contrast meets WCAG AA. Slate-600 on slate-50 is borderline for small text and should be verified.
 - Fraunces is loaded with `display: swap` to avoid layout shift.
 - Respect `prefers-reduced-motion`: disable the hover lift transform when it is set.
@@ -335,7 +335,7 @@ The page is fully static. No API calls, no client state beyond scroll behavior f
 
 ## Out of Scope
 
-- Real logos for the seven apps. Landing ships with letter monograms.
+- Real logos for the seven apps. Landing ships with Lucide icon monograms (`Workflow`, `Bot`, `Sparkles`, `Globe`, `Castle`, `Swords`, `Trophy`).
 - Analytics instrumentation beyond whatever the repo already has.
 - Newsletter signup, email capture, Stripe, auth.
 - Copy translations or localized routes.
@@ -353,7 +353,7 @@ The page is fully static. No API calls, no client state beyond scroll behavior f
 - `src/app/page.tsx` renders all seven sections in the order listed.
 - No em dashes and no "X, not Y" constructions anywhere in the copy.
 - All seven apps show up in the grid with correct accent colors and URLs.
-- SnowSports appears dimmed with a "SOON" pill and no link.
+- Every app card links to its subdomain. If an app has `comingSoon: true` in `apps.ts`, that card renders dimmed with a "SOON" pill and no link. (Currently no apps carry this flag.)
 - Featured SnowPipe card renders above the grid with working link.
 - FAQ contains exactly the five Q&A pairs in this spec.
 - Footer attribution line matches exactly.
