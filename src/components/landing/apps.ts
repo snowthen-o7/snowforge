@@ -70,6 +70,5 @@ export const APPS: AppEntry[] = [
     url: 'https://sports.snowforge.dev',
     color: '#0ea5e9',
     icon: Trophy,
-    comingSoon: true,
   },
 ]
