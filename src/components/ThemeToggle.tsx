@@ -1,35 +1,52 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
+
+type Theme = 'light' | 'dark'
+
+const listeners = new Set<() => void>()
+
+function subscribe(callback: () => void) {
+  listeners.add(callback)
+  return () => {
+    listeners.delete(callback)
+  }
+}
+
+function notify() {
+  listeners.forEach((cb) => cb())
+}
+
+function getSnapshot(): Theme {
+  const saved = localStorage.getItem('theme') as Theme | null
+  if (saved) return saved
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
+// On the server we can't read localStorage or media queries, so render nothing
+// until hydration resolves the real value. Returning null here is paired with
+// the early return below.
+function getServerSnapshot(): Theme | null {
+  return null
+}
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<'light' | 'dark' | null>(null)
+  const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
 
   useEffect(() => {
-    // Check if there's a saved theme preference
-    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null
+    if (theme === null) return
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+  }, [theme])
 
-    if (savedTheme) {
-      setTheme(savedTheme)
-      document.documentElement.classList.toggle('dark', savedTheme === 'dark')
-    } else {
-      // Use system preference
-      const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-      const systemTheme = systemPrefersDark ? 'dark' : 'light'
-      setTheme(systemTheme)
-      document.documentElement.classList.toggle('dark', systemTheme === 'dark')
-    }
-  }, [])
-
-  const toggleTheme = () => {
-    const newTheme = theme === 'dark' ? 'light' : 'dark'
-    setTheme(newTheme)
-    localStorage.setItem('theme', newTheme)
-    document.documentElement.classList.toggle('dark', newTheme === 'dark')
-  }
+  const toggleTheme = useCallback(() => {
+    if (theme === null) return
+    const next: Theme = theme === 'dark' ? 'light' : 'dark'
+    localStorage.setItem('theme', next)
+    notify()
+  }, [theme])
 
   if (theme === null) {
-    return null // Prevent flash of wrong theme
+    return null
   }
 
   return (
