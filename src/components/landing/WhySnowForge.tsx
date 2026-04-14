@@ -59,7 +59,7 @@ function ValueCard({ icon, title, body }: Value) {
         className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border text-lg"
         style={{
           backgroundColor: 'var(--warmth-soft-alpha)',
-          borderColor: 'rgba(251, 146, 60, 0.3)',
+          borderColor: 'rgb(var(--warmth-start) / 0.3)',
         }}
       >
         {icon}

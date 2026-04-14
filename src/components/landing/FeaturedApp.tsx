@@ -23,7 +23,7 @@ export function FeaturedApp({
         className="mx-auto max-w-5xl rounded-2xl border p-8 sm:p-10 grid gap-8 sm:grid-cols-[1fr_auto] items-center"
         style={{
           background: 'var(--warmth-soft-alpha)',
-          borderColor: 'rgba(251, 146, 60, 0.35)',
+          borderColor: 'rgb(var(--warmth-start) / 0.35)',
         }}
       >
         <div>
@@ -44,7 +44,7 @@ export function FeaturedApp({
           </a>
         </div>
         <div className="justify-self-center sm:justify-self-end">
-          <Monogram letter={monogramLetter} color="" size={140} warmthGradient />
+          <Monogram letter={monogramLetter} size={140} warmthGradient />
         </div>
       </div>
     </section>

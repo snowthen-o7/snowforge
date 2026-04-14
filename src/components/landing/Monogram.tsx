@@ -1,6 +1,7 @@
 type MonogramProps = {
   letter: string
-  color: string
+  /** Flat background color. Required when warmthGradient is not set. */
+  color?: string
   size?: number
   /** Use the warmth gradient instead of a flat color background. */
   warmthGradient?: boolean
