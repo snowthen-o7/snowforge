@@ -35,7 +35,7 @@ function AppCard({ app }: { app: AppEntry }) {
         style={{ backgroundColor: app.color }}
       />
       <div className="flex items-start gap-3">
-        <Monogram letter={app.name.charAt(0)} color={app.color} size={44} />
+        <Monogram icon={app.icon} color={app.color} size={44} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="text-base font-bold text-foreground">{app.name}</h3>

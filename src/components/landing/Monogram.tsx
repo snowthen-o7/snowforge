@@ -1,6 +1,11 @@
+import type { LucideIcon } from 'lucide-react'
+
 type MonogramProps = {
-  letter: string
-  /** Flat background color. Required when warmthGradient is not set. */
+  /** Lucide icon to render inside the tile. Takes precedence over letter. */
+  icon?: LucideIcon
+  /** Fallback letter when no icon is provided. */
+  letter?: string
+  /** Flat background color. Ignored when warmthGradient is true. */
   color?: string
   size?: number
   /** Use the warmth gradient instead of a flat color background. */
@@ -9,6 +14,7 @@ type MonogramProps = {
 }
 
 export function Monogram({
+  icon: Icon,
   letter,
   color,
   size = 48,
@@ -30,7 +36,7 @@ export function Monogram({
         fontSize: Math.round(size * 0.5),
       }}
     >
-      {letter}
+      {Icon ? <Icon size={Math.round(size * 0.55)} strokeWidth={2} /> : letter}
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import { Workflow } from 'lucide-react'
 import { Hero } from '@/components/landing/Hero'
 import { MeetAlex } from '@/components/landing/MeetAlex'
 import { WhySnowForge } from '@/components/landing/WhySnowForge'
@@ -17,7 +18,7 @@ export default function Home() {
         body="The flagship. Product feed orchestration for Shopify, Meta, and Google Merchant, built by someone who's been drowning in feed bugs for a decade. Free tier, paid plans, live today."
         href="https://pipe.snowforge.dev"
         ctaText="Try SnowPipe →"
-        monogramLetter="S"
+        icon={Workflow}
       />
       <AppGrid />
       <Faq />

@@ -18,10 +18,10 @@ export function Hero() {
         }}
       />
 
-      {/* Single snowflake glyph top-right */}
+      {/* Single snowflake glyph, left side to stay clear of the theme toggle */}
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute top-10 right-10 text-3xl text-ink-dim opacity-40 select-none"
+        className="pointer-events-none absolute top-10 left-10 text-3xl text-ink-dim opacity-40 select-none"
       >
         ❋
       </span>

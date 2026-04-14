@@ -1,3 +1,4 @@
+import type { LucideIcon } from 'lucide-react'
 import { Monogram } from './Monogram'
 
 type FeaturedAppProps = {
@@ -6,7 +7,7 @@ type FeaturedAppProps = {
   body: string
   href: string
   ctaText: string
-  monogramLetter: string
+  icon: LucideIcon
 }
 
 export function FeaturedApp({
@@ -15,7 +16,7 @@ export function FeaturedApp({
   body,
   href,
   ctaText,
-  monogramLetter,
+  icon,
 }: FeaturedAppProps) {
   return (
     <section id="featured" className="px-6 py-20">
@@ -44,7 +45,7 @@ export function FeaturedApp({
           </a>
         </div>
         <div className="justify-self-center sm:justify-self-end">
-          <Monogram letter={monogramLetter} size={140} warmthGradient />
+          <Monogram icon={icon} size={140} warmthGradient />
         </div>
       </div>
     </section>
