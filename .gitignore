@@ -35,3 +35,6 @@ next-env.d.ts
 
 # npmrc with GitHub token
 .npmrc
+
+# superpowers brainstorm session artifacts (visual companion HTML, state)
+.superpowers/
