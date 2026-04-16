@@ -38,3 +38,10 @@ next-env.d.ts
 
 # superpowers brainstorm session artifacts (visual companion HTML, state)
 .superpowers/
+
+# IDE / AI tooling
+.claude/
+.clinerules
+
+# npm lockfile (project uses pnpm)
+package-lock.json

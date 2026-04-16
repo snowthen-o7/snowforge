@@ -1,0 +1,202 @@
+{
+  "platform": "meta-catalog",
+  "platform_name": "Meta Product Catalog",
+  "description": "Severity rules and field definitions for Meta (Facebook/Instagram) Product Catalog feeds based on the Meta Commerce Manager product data specification.",
+  "primary_key_candidates": ["id", "retailer_id", "content_id"],
+  "required_fields": [
+    "id",
+    "title",
+    "description",
+    "availability",
+    "condition",
+    "price",
+    "link",
+    "image_link",
+    "brand"
+  ],
+  "recommended_fields": [
+    "sale_price",
+    "sale_price_effective_date",
+    "gtin",
+    "mpn",
+    "product_type",
+    "google_product_category",
+    "additional_image_link",
+    "color",
+    "size",
+    "gender",
+    "age_group",
+    "material",
+    "pattern",
+    "custom_label_0",
+    "custom_label_1",
+    "custom_label_2",
+    "custom_label_3",
+    "custom_label_4",
+    "fb_product_category",
+    "quantity_to_sell_on_facebook",
+    "rich_text_description"
+  ],
+  "critical_rules": [
+    {
+      "field": "id",
+      "condition": "becomes_empty",
+      "message": "Content ID removed -- this breaks dynamic remarketing if Pixel/CAPI events reference this ID"
+    },
+    {
+      "field": "id",
+      "condition": "value_changed",
+      "message": "Content ID changed -- dynamic ads will stop matching viewed/carted products, breaking remarketing"
+    },
+    {
+      "field": "price",
+      "condition": "becomes_empty",
+      "message": "Price removed -- required field, product will be rejected from the catalog"
+    },
+    {
+      "field": "price",
+      "condition": "equals_zero",
+      "message": "Price dropped to 0 -- product will be rejected or display $0.00 in dynamic ads"
+    },
+    {
+      "field": "price",
+      "condition": "becomes_negative",
+      "message": "Price is negative -- invalid value, product will be rejected"
+    },
+    {
+      "field": "title",
+      "condition": "becomes_empty",
+      "message": "Title removed -- required field, product will be rejected from the catalog"
+    },
+    {
+      "field": "description",
+      "condition": "becomes_empty",
+      "message": "Description removed -- required field, product will be rejected from the catalog"
+    },
+    {
+      "field": "link",
+      "condition": "becomes_empty",
+      "message": "Product URL removed -- required field, product will be rejected"
+    },
+    {
+      "field": "image_link",
+      "condition": "becomes_empty",
+      "message": "Image URL removed -- required field, product will be rejected and cannot appear in dynamic ads"
+    },
+    {
+      "field": "availability",
+      "condition": "becomes_empty",
+      "message": "Availability removed -- required field, product will be rejected"
+    },
+    {
+      "field": "availability",
+      "condition": "invalid_value",
+      "allowed_values": ["in stock", "out of stock", "preorder", "available for order", "discontinued"],
+      "message": "Availability has invalid value -- Meta uses space-separated values: 'in stock', 'out of stock', 'preorder', 'available for order', 'discontinued'"
+    },
+    {
+      "field": "condition",
+      "condition": "invalid_value",
+      "allowed_values": ["new", "refurbished", "used"],
+      "message": "Condition has invalid value -- must be one of: new, refurbished, used"
+    }
+  ],
+  "high_rules": [
+    {
+      "field": "brand",
+      "condition": "becomes_empty",
+      "message": "Brand removed -- required for most products in Meta catalog"
+    },
+    {
+      "field": "image_link",
+      "condition": "protocol_downgrade",
+      "message": "Image URL downgraded from HTTPS to HTTP -- Meta requires HTTPS for all image URLs"
+    },
+    {
+      "field": "price",
+      "condition": "decrease_exceeds_threshold",
+      "threshold_percent": 80,
+      "message": "Price decreased by more than 80% -- likely a data error, will display incorrect pricing in ads"
+    },
+    {
+      "field": "price",
+      "condition": "increase_exceeds_threshold",
+      "threshold_percent": 500,
+      "message": "Price increased by more than 500% -- likely a data error or currency mismatch"
+    },
+    {
+      "field": "sale_price",
+      "condition": "exceeds_price",
+      "message": "Sale price is higher than regular price -- Meta will ignore the sale price or reject the product"
+    },
+    {
+      "field": "title",
+      "condition": "length_exceeds",
+      "max_length": 200,
+      "message": "Title exceeds 200 characters -- will be truncated in ad placements"
+    },
+    {
+      "field": "description",
+      "condition": "length_exceeds",
+      "max_length": 9999,
+      "message": "Description exceeds maximum length -- will be truncated or may cause feed processing errors"
+    },
+    {
+      "field": "image_link",
+      "condition": "dimensions_below_minimum",
+      "min_width": 500,
+      "min_height": 500,
+      "message": "Image dimensions below 500x500 -- Meta recommends at least 500x500 pixels for catalog images"
+    },
+    {
+      "field": "gtin",
+      "condition": "becomes_empty",
+      "message": "GTIN removed -- reduces product matching accuracy for Advantage+ catalog ads"
+    },
+    {
+      "field": "link",
+      "condition": "domain_changed",
+      "message": "Product URL domain changed -- may indicate a data mapping error or site migration issue"
+    },
+    {
+      "field": "fb_product_category",
+      "condition": "becomes_empty",
+      "message": "Facebook product category removed -- products will fall back to auto-classification"
+    },
+    {
+      "field": "availability",
+      "condition": "changed_to_out_of_stock",
+      "threshold_percent": 20,
+      "message": "More than 20% of products changed to out of stock -- verify this is intentional before pushing"
+    }
+  ],
+  "field_mappings": {
+    "id": ["content_id", "retailer_id", "product_id", "item_id", "sku", "SKU", "ID", "retailer_product_id"],
+    "title": ["product_title", "name", "product_name", "item_title", "Title", "Name"],
+    "description": ["product_description", "body_html", "desc", "Description", "long_description", "short_description"],
+    "link": ["product_url", "url", "product_link", "URL", "Link", "canonical_url"],
+    "image_link": ["image_url", "image", "primary_image", "main_image", "Image URL", "image_src", "image_link"],
+    "additional_image_link": ["additional_images", "gallery_images", "extra_images", "additional_image_urls"],
+    "price": ["regular_price", "unit_price", "retail_price", "Price", "list_price", "base_price"],
+    "sale_price": ["special_price", "discount_price", "promo_price", "Sale Price", "reduced_price"],
+    "availability": ["stock_status", "in_stock", "inventory_status", "Availability", "stock_availability"],
+    "gtin": ["upc", "ean", "isbn", "barcode", "UPC", "EAN", "GTIN", "Barcode"],
+    "mpn": ["manufacturer_part_number", "part_number", "mfr_part_no", "MPN"],
+    "brand": ["manufacturer", "vendor", "Brand", "Vendor", "brand_name"],
+    "condition": ["product_condition", "item_condition", "Condition"],
+    "google_product_category": ["category", "product_category", "google_category", "Category"],
+    "fb_product_category": ["facebook_category", "meta_category", "fb_category"],
+    "product_type": ["category_path", "breadcrumb", "product_category_path", "Type"],
+    "color": ["colour", "Color", "Colour", "variant_color"],
+    "size": ["product_size", "Size", "variant_size"],
+    "gender": ["target_gender", "Gender", "sex"],
+    "age_group": ["target_age_group", "age", "Age Group"],
+    "material": ["fabric", "Material", "composition"],
+    "pattern": ["print", "Pattern", "design"],
+    "custom_label_0": ["custom_0", "label_0"],
+    "custom_label_1": ["custom_1", "label_1"],
+    "custom_label_2": ["custom_2", "label_2"],
+    "custom_label_3": ["custom_3", "label_3"],
+    "custom_label_4": ["custom_4", "label_4"]
+  }
+}

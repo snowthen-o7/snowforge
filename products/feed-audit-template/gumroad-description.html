@@ -1,0 +1,385 @@
+<!DOCTYPE html><html><head><title></title><meta charset="utf-8"><style>* {
+	box-sizing: border-box;
+}
+
+html {
+	font-size: 100%;
+}
+
+body {
+	font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell',
+		'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+	line-height: 1.6;
+	font-size: 0.6875em; /* 11 pt */
+	color: #111;
+	margin: 0;
+}
+
+body > :first-child {
+	padding-top: 0;
+	margin-top: 0;
+}
+
+body > :last-child {
+	margin-bottom: 0;
+	padding-bottom: 0;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	margin: 0;
+	padding: 0.5em 0 0.25em;
+}
+
+h5,
+h6 {
+	padding: 0;
+}
+
+h5 {
+	font-size: 1em;
+}
+
+h6 {
+	font-size: 0.875em;
+	text-transform: uppercase;
+}
+
+p {
+	margin: 0.25em 0 1em;
+}
+
+blockquote {
+	margin: 0.5em 0 1em;
+	padding-left: 0.5em;
+	padding-right: 1em;
+	border-left: 4px solid gainsboro;
+	font-style: italic;
+}
+
+ul,
+ol {
+	margin: 0;
+	margin-left: 1em;
+	padding: 0 1.5em 0.5em;
+}
+
+pre {
+	white-space: pre-wrap;
+}
+
+h1 code,
+h2 code,
+h3 code,
+h4 code,
+h5 code,
+h6 code,
+p code,
+li code,
+pre code {
+	background-color: #f8f8f8;
+	padding: 0.1em 0.375em;
+	border: 1px solid #f8f8f8;
+	border-radius: 0.25em;
+	font-family: monospace;
+	font-size: 1.2em;
+}
+
+pre code {
+	display: block;
+	padding: 0.5em;
+}
+
+.page-break {
+	page-break-after: always;
+}
+
+img {
+	max-width: 100%;
+	margin: 1em 0;
+}
+
+table {
+	border-spacing: 0;
+	border-collapse: collapse;
+	display: block;
+	margin: 0 0 1em;
+	width: 100%;
+	overflow: auto;
+}
+
+table th,
+table td {
+	padding: 0.5em 1em;
+	border: 1px solid gainsboro;
+}
+
+table th {
+	font-weight: 600;
+}
+
+table tr {
+	background-color: white;
+	border-top: 1px solid gainsboro;
+}
+
+table tr:nth-child(2n) {
+	background-color: whitesmoke;
+}
+/*# sourceURL=C:\Users\alexi\AppData\Local\npm-cache\_npx\55158e48eb5c59f7\node_modules\md-to-pdf\markdown.css*/</style><style>pre code.hljs {
+  display: block;
+  overflow-x: auto;
+  padding: 1em
+}
+code.hljs {
+  padding: 3px 5px
+}
+/*!
+  Theme: GitHub
+  Description: Light theme as seen on github.com
+  Author: github.com
+  Maintainer: @Hirse
+  Updated: 2021-05-15
+
+  Outdated base version: https://github.com/primer/github-syntax-light
+  Current colors taken from GitHub's CSS
+*/
+.hljs {
+  color: #24292e;
+  background: #ffffff
+}
+.hljs-doctag,
+.hljs-keyword,
+.hljs-meta .hljs-keyword,
+.hljs-template-tag,
+.hljs-template-variable,
+.hljs-type,
+.hljs-variable.language_ {
+  /* prettylights-syntax-keyword */
+  color: #d73a49
+}
+.hljs-title,
+.hljs-title.class_,
+.hljs-title.class_.inherited__,
+.hljs-title.function_ {
+  /* prettylights-syntax-entity */
+  color: #6f42c1
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-literal,
+.hljs-meta,
+.hljs-number,
+.hljs-operator,
+.hljs-variable,
+.hljs-selector-attr,
+.hljs-selector-class,
+.hljs-selector-id {
+  /* prettylights-syntax-constant */
+  color: #005cc5
+}
+.hljs-regexp,
+.hljs-string,
+.hljs-meta .hljs-string {
+  /* prettylights-syntax-string */
+  color: #032f62
+}
+.hljs-built_in,
+.hljs-symbol {
+  /* prettylights-syntax-variable */
+  color: #e36209
+}
+.hljs-comment,
+.hljs-code,
+.hljs-formula {
+  /* prettylights-syntax-comment */
+  color: #6a737d
+}
+.hljs-name,
+.hljs-quote,
+.hljs-selector-tag,
+.hljs-selector-pseudo {
+  /* prettylights-syntax-entity-tag */
+  color: #22863a
+}
+.hljs-subst {
+  /* prettylights-syntax-storage-modifier-import */
+  color: #24292e
+}
+.hljs-section {
+  /* prettylights-syntax-markup-heading */
+  color: #005cc5;
+  font-weight: bold
+}
+.hljs-bullet {
+  /* prettylights-syntax-markup-list */
+  color: #735c0f
+}
+.hljs-emphasis {
+  /* prettylights-syntax-markup-italic */
+  color: #24292e;
+  font-style: italic
+}
+.hljs-strong {
+  /* prettylights-syntax-markup-bold */
+  color: #24292e;
+  font-weight: bold
+}
+.hljs-addition {
+  /* prettylights-syntax-markup-inserted */
+  color: #22863a;
+  background-color: #f0fff4
+}
+.hljs-deletion {
+  /* prettylights-syntax-markup-deleted */
+  color: #b31d28;
+  background-color: #ffeef0
+}
+.hljs-char.escape_,
+.hljs-link,
+.hljs-params,
+.hljs-property,
+.hljs-punctuation,
+.hljs-tag {
+  /* purposely ignored */
+  
+}/*# sourceURL=C:\Users\alexi\AppData\Local\npm-cache\_npx\55158e48eb5c59f7\node_modules\highlight.js\styles\github.css*/</style></head>
+	<body class="">
+		<h2 id="your-product-feed-is-costing-you-money-find-out-exactly-where-in-30-seconds">Your product feed is costing you money. Find out exactly where in 30 seconds.</h2>
+<p>Broken images. Missing GTINs. Titles stuffed with promotional text. Sale prices higher than regular prices. Every one of these issues silently kills your Google Shopping ads, Meta dynamic campaigns, and marketplace listings. You do not get a notification. Your products just stop showing up.</p>
+<p>This is an automated audit tool that finds those problems for you. Paste your product feed into Google Sheets, click a button, and get a color-coded graded report with 130+ checks, no manual review, no guesswork.</p>
+<h2 id="how-it-works">How It Works</h2>
+<ol>
+<li>Paste your product feed CSV into a Google Sheet</li>
+<li>Click <strong>Feed Audit &gt; Run Full Scan</strong> (or a platform-specific audit) from the menu bar</li>
+<li>Get a graded report with color-coded PASS, FAIL, and WARNING rows, plus a health score out of 100</li>
+</ol>
+<p>That is it. No software to install. No API keys. No account to create. Runs entirely inside Google Sheets using Google Apps Script.</p>
+<h2 id="what-gets-checked">What Gets Checked</h2>
+<h3 id="required-fields">Required Fields</h3>
+<ul>
+<li>Title present, length (25 to 150 chars), no promotional text (sale, discount, BOGO, free shipping)</li>
+<li>Description present, length (100 to 5000 chars), no raw HTML tags</li>
+<li>Price present, valid format, positive value</li>
+<li>Availability present with valid values</li>
+<li>Image link present and valid URL</li>
+<li>Product URL present</li>
+<li>Unique product IDs with duplicate detection</li>
+<li>Condition field validation</li>
+</ul>
+<h3 id="image-quality">Image Quality</h3>
+<ul>
+<li>All image URLs use HTTPS (not HTTP)</li>
+<li>No placeholder or "coming soon" image URLs</li>
+<li>Supported file formats only</li>
+<li>Additional image coverage and duplicate detection</li>
+</ul>
+<h3 id="pricing">Pricing</h3>
+<ul>
+<li>Price outlier detection (flags values more than 10x or less than 0.1x the median)</li>
+<li>Sale price always less than regular price</li>
+<li>Sale price decimal precision, effective date validation</li>
+</ul>
+<h3 id="availability">Availability</h3>
+<ul>
+<li>Out-of-stock percentage warning (flags if more than 50 percent OOS)</li>
+<li>Availability value distribution breakdown</li>
+<li>Preorder and backorder dates validation</li>
+</ul>
+<h3 id="feed-freshness">Feed Freshness</h3>
+<ul>
+<li>Total product count</li>
+<li>Duplicate title detection with examples</li>
+</ul>
+<h3 id="google-merchant-center-specific">Google Merchant Center Specific</h3>
+<ul>
+<li>GTIN present, valid format (8, 12, 13, or 14 digits), check digit validation, restricted range detection</li>
+<li>Brand present, under 70 character limit</li>
+<li>MPN required when GTIN is missing</li>
+<li>Google product category mapped with granularity check</li>
+<li>Product type set with depth and format validation</li>
+<li>Sale price below regular price (Google disapproves violations)</li>
+<li>Custom labels utilized for campaign segmentation</li>
+<li>Cost of goods sold format</li>
+<li>Expiration date format and past-date detection</li>
+<li>Unit pricing measure validation</li>
+<li>Identifier exists cross-check</li>
+<li>Condition matches title detection</li>
+<li>Multipack and is_bundle validation</li>
+<li>Age group required for apparel</li>
+<li>Ads redirect domain matching</li>
+<li>Promotion ID format</li>
+<li>Price not zero</li>
+<li>Availability uses Google-accepted values</li>
+</ul>
+<h3 id="meta-catalog-specific">Meta Catalog Specific</h3>
+<ul>
+<li>Content ID present</li>
+<li>UTM parameters in product URLs for attribution tracking</li>
+</ul>
+<h3 id="shopify-specific">Shopify Specific</h3>
+<ul>
+<li>Handle present</li>
+<li>Variant SKU present</li>
+<li>Product status validation (active, draft, archived)</li>
+</ul>
+<h2 id="smart-column-detection">Smart Column Detection</h2>
+<p>Different platforms use different column names. This tool handles that automatically.</p>
+<p>Paste a Shopify export with "Variant Price" and it finds the price column. Paste a Google feed with "image_link" and it works. Paste a WooCommerce export with "regular_price" and it picks it up.</p>
+<p>The tool checks over 100 column name aliases across all platforms. You do not need to rename anything.</p>
+<p><strong>Works with:</strong></p>
+<ul>
+<li>Shopify product CSV exports</li>
+<li>Google Merchant Center feed exports</li>
+<li>Meta and Facebook catalog exports</li>
+<li>WooCommerce feed plugin exports (CTX Feed, YITH, etc.)</li>
+<li>BigCommerce, Magento, and any other CSV product export</li>
+</ul>
+<h2 id="what-you-get">What You Get</h2>
+<h3 id="1-feed-audit-tool-google-apps-script">1. Feed Audit Tool (Google Apps Script)</h3>
+<p>The automated audit script that runs inside Google Sheets. Paste it into the Apps Script editor, refresh, and run. Includes:</p>
+<ul>
+<li><strong>130+ automated checks</strong> across 9 categories</li>
+<li><strong>Platform-specific modes</strong> for Google Merchant, Meta Catalog, and Shopify, plus a Full Scan that runs every check</li>
+<li><strong>Color-coded results</strong> with severity ratings (Critical, High, Medium, Low)</li>
+<li><strong>Health score</strong> (0 to 100) so you can track improvement over time</li>
+<li><strong>Smart column matching</strong> with over 100 aliases that handles different naming conventions automatically</li>
+<li><strong>Cell-level hyperlinks</strong> from each failed check example to the exact problem cell in your source data</li>
+</ul>
+<h3 id="2-feed-audit-guide-pdf">2. Feed Audit Guide (PDF)</h3>
+<p>A companion guide covering:</p>
+<ul>
+<li>The 5 feed issues that cost the most money, with real-world patterns and revenue impact</li>
+<li>Platform-specific gotchas for Shopify, WooCommerce, and Google Merchant Center</li>
+<li>How to prioritize fixes using a 3-tier framework (Disapprovals, Data Quality, Optimization)</li>
+<li>Ongoing monitoring checklist with daily, weekly, monthly, and quarterly schedules</li>
+</ul>
+<h3 id="3-setup-instructions">3. Setup Instructions</h3>
+<p>Step-by-step guide to get the tool running in under 5 minutes. No technical knowledge required.</p>
+<h2 id="who-this-is-for">Who This Is For</h2>
+<ul>
+<li><strong>Store owners</strong> managing their own product feeds who want to find issues before Google or Meta does</li>
+<li><strong>Marketing managers</strong> running Shopping or Catalog campaigns who need to diagnose performance drops</li>
+<li><strong>Freelancers and consultants</strong> who audit feeds for clients, run the tool and deliver the results sheet as a professional deliverable</li>
+<li><strong>Agencies</strong> onboarding new e-commerce clients who need a structured feed health assessment</li>
+<li><strong>Feed managers</strong> who want a repeatable, automated system instead of manual spot-checking</li>
+</ul>
+<h2 id="what-makes-this-different">What Makes This Different</h2>
+<p>This is not a checklist you fill out by hand. It is an automated tool that reads your actual feed data and grades every row against 130+ rules.</p>
+<p>It catches things manual reviews miss: the 3 products with HTTP image links buried in a 5,000-row feed. The 12 items where sale price equals regular price. The duplicate IDs that cause silent overwrites in Google Merchant Center. The 414 products with empty titles in a 51,000 product Shopify catalog that would have been disapproved the moment they hit Google.</p>
+<p>The severity ratings reflect real revenue impact. Critical items are things that get your products disapproved today. The health score gives you a single number to track over time.</p>
+<h2 id="whats-in-the-download">What's in the Download</h2>
+<ul>
+<li><strong>Code.gs</strong>, the Google Apps Script (paste into Extensions &gt; Apps Script)</li>
+<li><strong>setup-instructions.md</strong>, step-by-step setup guide</li>
+<li><strong>guide.pdf</strong>, companion guide for fixing issues and ongoing monitoring</li>
+<li><strong>README.md</strong>, this description for reference</li>
+</ul>
+
+	
+
+</body></html>

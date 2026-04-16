@@ -1,0 +1,209 @@
+{
+  "platform": "shopify-export",
+  "platform_name": "Shopify Product Export",
+  "description": "Severity rules and field definitions for Shopify's native product CSV export format and common Shopify feed app outputs.",
+  "primary_key_candidates": ["Handle", "Variant SKU", "Variant Barcode"],
+  "required_fields": [
+    "Handle",
+    "Title",
+    "Body (HTML)",
+    "Vendor",
+    "Type",
+    "Published",
+    "Variant SKU",
+    "Variant Price",
+    "Variant Inventory Qty",
+    "Image Src",
+    "Status"
+  ],
+  "recommended_fields": [
+    "Variant Grams",
+    "Variant Barcode",
+    "Variant Compare At Price",
+    "Variant Inventory Policy",
+    "Variant Fulfillment Service",
+    "Variant Requires Shipping",
+    "Variant Taxable",
+    "Image Position",
+    "Image Alt Text",
+    "SEO Title",
+    "SEO Description",
+    "Google Shopping / Google Product Category",
+    "Google Shopping / Gender",
+    "Google Shopping / Age Group",
+    "Google Shopping / MPN",
+    "Google Shopping / Condition",
+    "Google Shopping / Custom Product",
+    "Google Shopping / Custom Label 0",
+    "Google Shopping / Custom Label 1",
+    "Google Shopping / Custom Label 2",
+    "Google Shopping / Custom Label 3",
+    "Google Shopping / Custom Label 4",
+    "Tags",
+    "Collection"
+  ],
+  "critical_rules": [
+    {
+      "field": "Variant Price",
+      "condition": "becomes_empty",
+      "message": "Variant price removed -- product will display with no price or $0.00"
+    },
+    {
+      "field": "Variant Price",
+      "condition": "equals_zero",
+      "message": "Variant price is $0.00 -- likely a data error unless this is a free product"
+    },
+    {
+      "field": "Variant Price",
+      "condition": "becomes_negative",
+      "message": "Variant price is negative -- invalid value"
+    },
+    {
+      "field": "Title",
+      "condition": "becomes_empty",
+      "message": "Product title removed -- product will be unusable in feeds and on storefront"
+    },
+    {
+      "field": "Handle",
+      "condition": "value_changed",
+      "message": "Product handle changed -- this changes the product URL and breaks existing links, feed URLs, and SEO"
+    },
+    {
+      "field": "Handle",
+      "condition": "becomes_empty",
+      "message": "Product handle removed -- product cannot be identified or linked"
+    },
+    {
+      "field": "Status",
+      "condition": "value_changed",
+      "message": "Product status changed -- verify whether this should move to/from active, draft, or archived"
+    },
+    {
+      "field": "Image Src",
+      "condition": "becomes_empty",
+      "message": "Product image removed -- product will have no image in feeds and shopping ads"
+    },
+    {
+      "field": "Variant SKU",
+      "condition": "becomes_empty",
+      "message": "Variant SKU removed -- breaks inventory tracking and feed ID matching"
+    },
+    {
+      "field": "Variant SKU",
+      "condition": "duplicate_value",
+      "message": "Duplicate variant SKU detected -- will cause inventory and feed conflicts"
+    },
+    {
+      "field": "Published",
+      "condition": "changed_to_false",
+      "message": "Product unpublished -- will be removed from all sales channels and feeds"
+    }
+  ],
+  "high_rules": [
+    {
+      "field": "Variant Barcode",
+      "condition": "becomes_empty",
+      "message": "Variant barcode (GTIN/UPC) removed -- will reduce Google Shopping visibility"
+    },
+    {
+      "field": "Variant Barcode",
+      "condition": "length_invalid",
+      "valid_lengths": [8, 12, 13, 14],
+      "message": "Barcode length is invalid -- UPC should be 12 digits, EAN should be 13 digits"
+    },
+    {
+      "field": "Vendor",
+      "condition": "becomes_empty",
+      "message": "Vendor (brand) removed -- required for Google Merchant Center, will cause disapprovals"
+    },
+    {
+      "field": "Variant Inventory Qty",
+      "condition": "becomes_empty",
+      "message": "Inventory quantity removed -- stock tracking may be broken for this variant"
+    },
+    {
+      "field": "Variant Inventory Qty",
+      "condition": "becomes_negative",
+      "message": "Inventory quantity is negative -- indicates oversell or data sync issue"
+    },
+    {
+      "field": "Variant Price",
+      "condition": "decrease_exceeds_threshold",
+      "threshold_percent": 80,
+      "message": "Price decreased by more than 80% -- likely a data error, verify before pushing"
+    },
+    {
+      "field": "Variant Price",
+      "condition": "increase_exceeds_threshold",
+      "threshold_percent": 500,
+      "message": "Price increased by more than 500% -- likely a data error or unit mismatch"
+    },
+    {
+      "field": "Variant Compare At Price",
+      "condition": "less_than_price",
+      "message": "Compare-at price is less than variant price -- the strikethrough price is lower than the actual price, which confuses customers"
+    },
+    {
+      "field": "Body (HTML)",
+      "condition": "becomes_empty",
+      "message": "Product description removed -- will hurt SEO and feed quality, may cause disapprovals"
+    },
+    {
+      "field": "Type",
+      "condition": "becomes_empty",
+      "message": "Product type removed -- breaks collection rules and product categorization in feeds"
+    },
+    {
+      "field": "Google Shopping / Google Product Category",
+      "condition": "becomes_empty",
+      "message": "Google product category removed -- products will fall back to auto-classification"
+    },
+    {
+      "field": "Image Src",
+      "condition": "protocol_downgrade",
+      "message": "Image URL downgraded from HTTPS to HTTP -- may cause issues with feed channels"
+    },
+    {
+      "field": "Variant Inventory Qty",
+      "condition": "bulk_zero",
+      "threshold_percent": 30,
+      "message": "More than 30% of variants dropped to 0 inventory -- verify this is not a sync error"
+    },
+    {
+      "field": "Tags",
+      "condition": "becomes_empty",
+      "message": "All tags removed -- may break automated collections and feed filtering rules"
+    }
+  ],
+  "field_mappings": {
+    "Handle": ["handle", "url_handle", "slug", "product_handle"],
+    "Title": ["title", "product_title", "name", "product_name"],
+    "Body (HTML)": ["body_html", "description", "product_description", "body", "html_body"],
+    "Vendor": ["vendor", "brand", "manufacturer", "Brand"],
+    "Type": ["product_type", "type", "category", "product_category"],
+    "Tags": ["tags", "product_tags", "labels"],
+    "Published": ["published", "published_at", "is_published", "active"],
+    "Variant SKU": ["sku", "variant_sku", "SKU", "item_sku"],
+    "Variant Grams": ["weight", "grams", "variant_weight", "weight_grams"],
+    "Variant Inventory Qty": ["inventory_quantity", "qty", "stock", "inventory", "quantity"],
+    "Variant Price": ["price", "variant_price", "Price", "retail_price"],
+    "Variant Compare At Price": ["compare_at_price", "original_price", "msrp", "list_price", "was_price"],
+    "Variant Barcode": ["barcode", "upc", "ean", "gtin", "UPC", "EAN", "GTIN"],
+    "Image Src": ["image_url", "image_src", "image", "image_link", "primary_image"],
+    "Image Alt Text": ["image_alt", "alt_text", "image_alt_text"],
+    "SEO Title": ["seo_title", "meta_title", "page_title"],
+    "SEO Description": ["seo_description", "meta_description", "page_description"],
+    "Status": ["status", "product_status"],
+    "Google Shopping / Google Product Category": ["google_product_category", "google_category", "shopping_category"],
+    "Google Shopping / Gender": ["gender", "target_gender"],
+    "Google Shopping / Age Group": ["age_group", "target_age_group"],
+    "Google Shopping / MPN": ["mpn", "manufacturer_part_number"],
+    "Google Shopping / Condition": ["condition", "product_condition"],
+    "Google Shopping / Custom Label 0": ["custom_label_0", "custom_0"],
+    "Google Shopping / Custom Label 1": ["custom_label_1", "custom_1"],
+    "Google Shopping / Custom Label 2": ["custom_label_2", "custom_2"],
+    "Google Shopping / Custom Label 3": ["custom_label_3", "custom_3"],
+    "Google Shopping / Custom Label 4": ["custom_label_4", "custom_4"],
+    "Collection": ["collection", "collections", "product_collections"]
+  }
+}
