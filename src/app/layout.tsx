@@ -18,6 +18,7 @@ const fraunces = Fraunces({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://snowforge.dev'),
   title: 'SnowForge · Small tools, made with big care.',
   description:
     'An indie software studio forging tools for e-commerce, content, automation, and the games I love. Seven apps, one account. Built by Alex Diaz.',
@@ -32,6 +33,19 @@ export const metadata: Metadata = {
     'Alex Diaz',
   ],
   authors: [{ name: 'Alex Diaz', url: 'https://alexdiaz.me' }],
+  manifest: '/site.webmanifest',
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/favicon-16.png', type: 'image/png', sizes: '16x16' },
+      { url: '/favicon-32.png', type: 'image/png', sizes: '32x32' },
+      { url: '/favicon-192.png', type: 'image/png', sizes: '192x192' },
+      { url: '/favicon-512.png', type: 'image/png', sizes: '512x512' },
+    ],
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
+  },
   openGraph: {
     title: 'SnowForge · Small tools, made with big care.',
     description:
@@ -39,12 +53,21 @@ export const metadata: Metadata = {
     type: 'website',
     url: 'https://snowforge.dev',
     siteName: 'SnowForge',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1500,
+        height: 500,
+        alt: 'SnowForge · Small tools, made with big care.',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'SnowForge · Small tools, made with big care.',
     description:
       'An indie software studio forging tools for e-commerce, content, automation, and the games I love. Seven apps, one account.',
+    images: ['/og-image.png'],
   },
 }
 
