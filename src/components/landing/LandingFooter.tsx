@@ -9,6 +9,15 @@ export function LandingFooter() {
           <span aria-hidden="true">❋</span>
         </p>
         <nav className="flex flex-wrap gap-x-6 gap-y-2">
+          <a href="/about" className="hover:text-foreground transition-colors">
+            About
+          </a>
+          <a href="/blog" className="hover:text-foreground transition-colors">
+            Blog
+          </a>
+          <a href="/contact" className="hover:text-foreground transition-colors">
+            Contact
+          </a>
           <a href="https://alexdiaz.me" className="hover:text-foreground transition-colors">
             alexdiaz.me
           </a>
