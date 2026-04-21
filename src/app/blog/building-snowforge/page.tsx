@@ -109,6 +109,7 @@ export default function Post() {
       </p>
       <p>
         If you&rsquo;re curious about any specific app, the{' '}
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
         <a href="/#app-grid">app grid on the homepage</a> is the
         map. Email me at{' '}
         <a href="mailto:support@snowforge.dev">support@snowforge.dev</a>{' '}
