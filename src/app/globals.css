@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+@source "../../../node_modules/@snowforge/ui/src/**/*.{ts,tsx}";
 
 @variant dark (&:where(.dark, .dark *));
 
