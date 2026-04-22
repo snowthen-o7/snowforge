@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "@snowforge/ui": "git+https://github.com/snowthen-o7/snowforge-ui.git",
+    "clsx": "^2.1.1",
     "lucide-react": "^1.8.0",
     "next": "latest",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
