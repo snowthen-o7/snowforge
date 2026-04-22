@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { LandingFooter } from '@/components/landing/LandingFooter'
+import { LandingHeader } from '@/components/landing/LandingHeader'
 
 export const metadata: Metadata = {
   title: 'Blog · SnowForge',
@@ -31,8 +32,9 @@ const posts = [
 
 export default function BlogIndexPage() {
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <section className="mx-auto max-w-3xl px-6 py-20">
+    <main className="min-h-screen flex flex-col bg-background text-foreground">
+      <LandingHeader />
+      <section className="mx-auto w-full max-w-3xl flex-1 px-6 py-20">
         <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-dim">
           Blog
         </p>

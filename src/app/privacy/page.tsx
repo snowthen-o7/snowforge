@@ -1,6 +1,11 @@
+import { LandingFooter } from '@/components/landing/LandingFooter'
+import { LandingHeader } from '@/components/landing/LandingHeader'
+
 export default function PrivacyPolicy() {
   return (
-    <div className="max-w-4xl mx-auto py-16 px-4 sm:px-6 lg:px-8">
+    <main className="min-h-screen flex flex-col bg-background text-foreground">
+      <LandingHeader />
+      <div className="mx-auto w-full max-w-4xl flex-1 py-16 px-4 sm:px-6 lg:px-8">
       <header className="mb-12">
         <h1 className="text-4xl font-bold text-foreground mb-2">Privacy Policy</h1>
         <p className="text-muted-foreground">Last updated: January 2025</p>
@@ -326,6 +331,8 @@ export default function PrivacyPolicy() {
           </p>
         </section>
       </div>
-    </div>
+      </div>
+      <LandingFooter />
+    </main>
   );
 }

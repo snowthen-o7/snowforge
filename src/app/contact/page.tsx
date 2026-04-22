@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { LandingFooter } from '@/components/landing/LandingFooter'
+import { LandingHeader } from '@/components/landing/LandingHeader'
 
 export const metadata: Metadata = {
   title: 'Contact · SnowForge',
@@ -10,8 +11,9 @@ export const metadata: Metadata = {
 
 export default function ContactPage() {
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <article className="mx-auto max-w-2xl px-6 py-20">
+    <main className="min-h-screen flex flex-col bg-background text-foreground">
+      <LandingHeader />
+      <article className="mx-auto w-full max-w-2xl flex-1 px-6 py-20">
         <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-dim">
           Contact
         </p>

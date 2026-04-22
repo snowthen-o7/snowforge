@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import Image from 'next/image'
 import { LandingFooter } from '@/components/landing/LandingFooter'
+import { LandingHeader } from '@/components/landing/LandingHeader'
 
 export const metadata: Metadata = {
   title: 'About · SnowForge',
@@ -11,8 +12,9 @@ export const metadata: Metadata = {
 
 export default function AboutPage() {
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <article className="mx-auto max-w-3xl px-6 py-20">
+    <main className="min-h-screen flex flex-col bg-background text-foreground">
+      <LandingHeader />
+      <article className="mx-auto w-full max-w-3xl flex-1 px-6 py-20">
         <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-dim">
           About
         </p>
@@ -38,7 +40,7 @@ export default function AboutPage() {
           </div>
         </div>
 
-        <div className="prose prose-lg prose-invert mt-10 max-w-none text-muted-foreground">
+        <div className="prose prose-lg dark:prose-invert mt-10 max-w-none">
           <h2 className="font-display text-2xl text-foreground">Why SnowForge exists</h2>
           <p>
             SnowForge is an independent software studio run by one person in

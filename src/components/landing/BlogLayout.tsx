@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { LandingFooter } from '@/components/landing/LandingFooter'
+import { LandingHeader } from '@/components/landing/LandingHeader'
 
 interface BlogLayoutProps {
   title: string
@@ -11,8 +12,9 @@ interface BlogLayoutProps {
 
 export function BlogLayout({ title, date, dek, children }: BlogLayoutProps) {
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <article className="mx-auto max-w-3xl px-6 py-20">
+    <main className="min-h-screen flex flex-col bg-background text-foreground">
+      <LandingHeader />
+      <article className="mx-auto w-full max-w-3xl flex-1 px-6 py-20">
         <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-dim">
           <Link href="/blog" className="hover:text-foreground">
             ← Blog
@@ -27,7 +29,7 @@ export function BlogLayout({ title, date, dek, children }: BlogLayoutProps) {
             {dek}
           </p>
         ) : null}
-        <div className="prose prose-lg prose-invert mt-10 max-w-none text-muted-foreground">
+        <div className="prose prose-lg dark:prose-invert mt-10 max-w-none">
           {children}
         </div>
       </article>
