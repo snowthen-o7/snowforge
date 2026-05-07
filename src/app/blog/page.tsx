@@ -11,6 +11,12 @@ export const metadata: Metadata = {
 
 const posts = [
   {
+    slug: 'auditing-feeds-before-you-push',
+    title: 'Audit your product feed before you push it',
+    dek: 'Most GMC disapprovals are preventable if you audit the feed before you push it. Here is the eight-check list I use on real catalogs.',
+    date: '2026-05-06',
+  },
+  {
     slug: 'building-snowforge',
     title: 'Why I&rsquo;m building SnowForge from a day-job desk',
     dek: 'A small studio, a handful of apps, and a slow build towards software I&rsquo;m genuinely excited to maintain.',

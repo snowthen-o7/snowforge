@@ -7,6 +7,7 @@ const routes = [
   '/about',
   '/contact',
   '/blog',
+  '/blog/auditing-feeds-before-you-push',
   '/blog/building-snowforge',
   '/blog/why-product-feeds-break',
   '/blog/fortnite-shop-tracker',
