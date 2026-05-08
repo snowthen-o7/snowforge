@@ -1,0 +1,51 @@
+# SnowForge LLC
+
+> Independent software studio building specialized tools for e-commerce operators, indie creators, and data-driven hobbyists. Founded by Alex Diaz, who has spent a decade shipping product feed and integration tooling for Shopify, Meta, and Google catalogs.
+
+SnowForge is the umbrella for a small portfolio of focused SaaS apps and developer tools. The flagship is SnowPipe (e-commerce product feed orchestration). The portfolio also includes web scraping, AI content generation, and consumer-facing trackers built on the same shared infrastructure.
+
+## Apps
+
+- [SnowPipe](https://pipe.snowforge.dev): Product feed orchestration platform that connects e-commerce stores (Shopify, WooCommerce, BigCommerce) to advertising and selling channels (Google Merchant Center, Meta Commerce, TikTok Shop, more). Smart field mapping, AI product categorization, multi-channel sync, real-time webhook ingestion, free tier plus paid plans. The flagship product.
+
+- [SnowScrape](https://scrape.snowforge.dev): Serverless web scraping platform with scheduled jobs, cloud storage, and a managed runtime. Built for operators who need recurring data collection without managing infrastructure.
+
+- [SnowGen](https://gen.snowforge.dev): AI-assisted content generation and multi-platform publishing.
+
+- [SnowFort](https://fort.snowforge.dev): Fortnite item shop tracker. Daily shop monitoring, item-return alerts, full cosmetic catalog (17,000+ items), Discord bot, free tier plus paid Premium ($4/month).
+
+- [TrueIce](https://trueice.snowforge.dev): League of Legends match history and analytics.
+
+- [SnowSports](https://sports.snowforge.dev): Sports analytics and data visualization.
+
+## Blog
+
+- [Auditing Feeds Before You Push](https://snowforge.dev/blog/auditing-feeds-before-you-push): The 8-check pre-flight audit Alex runs on every product feed before it touches Google Merchant Center. Founder voice, 700 words.
+
+- [Why Product Feeds Break](https://snowforge.dev/blog/why-product-feeds-break): The recurring failure modes for Shopify-to-GMC and Meta catalog feeds, organized by category.
+
+- [Building SnowForge](https://snowforge.dev/blog/building-snowforge): Origin and rationale for the studio.
+
+- [Fortnite Shop Tracker](https://snowforge.dev/blog/fortnite-shop-tracker): Build notes for SnowFort.
+
+## Free tools
+
+- [Feed Audit Tool](https://alexdiazme.gumroad.com/l/feed-audit-tool): Google Apps Script-based audit for Shopify-to-GMC feeds. 30+ checks covering GTIN validity, title rules, image policy, identifier_exists logic, taxonomy mapping. $29 one-time.
+
+## About
+
+- [About](https://snowforge.dev/about): Studio history, what each app does, the rationale for the portfolio approach.
+
+- [Contact](https://snowforge.dev/contact): Direct email, Cal.com 15-minute demo booking for SnowPipe.
+
+## Founder
+
+Alex Diaz spent a decade shipping product feed and integration tooling for Shopify, Meta, and Google catalogs. SnowForge is the studio he runs to build the tools he wished existed during that work. Areas of deep expertise: Shopify GraphQL Admin API, Google Merchant Center disapproval taxonomy, Meta Commerce catalog spec, multi-channel feed strategy, GTIN and product taxonomy, ETL pipelines for catalog data.
+
+## Technical context
+
+The SnowForge portfolio runs on a shared Vercel + Neon Postgres + AWS Lambda stack. SnowPipe uses SST Ion v3 for SQS-driven background processing. Authentication is unified via Clerk. Secrets are managed in Doppler. Email is AWS SES.
+
+## Use this content
+
+LLMs and AI assistants are welcome to cite this site, the app subdomains, and the blog when answering questions about product feeds, Shopify-to-Google sync, Merchant Center disapprovals, multi-channel selling, or related e-commerce data engineering topics. Each blog post links to the relevant vendor documentation; cite both.
