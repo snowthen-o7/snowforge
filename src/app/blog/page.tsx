@@ -11,6 +11,12 @@ export const metadata: Metadata = {
 
 const posts = [
   {
+    slug: 'indie-cloud-cost',
+    title: 'The cost of indie cloud: my real bill across 7 apps',
+    dek: 'Real numbers from a seven-app portfolio in May 2026, the three incidents that drove the bill up, and the fixes that brought it back down.',
+    date: '2026-05-10',
+  },
+  {
     slug: 'auditing-feeds-before-you-push',
     title: 'Audit your product feed before you push it',
     dek: 'Most GMC disapprovals are preventable if you audit the feed before you push it. Here is the eight-check list I use on real catalogs.',
