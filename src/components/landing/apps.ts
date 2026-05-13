@@ -1,7 +1,6 @@
 import {
   Bot,
   Castle,
-  Globe,
   Sparkles,
   Swords,
   Trophy,
@@ -42,13 +41,6 @@ export const APPS: AppEntry[] = [
     url: 'https://gen.snowforge.dev',
     color: '#8b5cf6',
     icon: Sparkles,
-  },
-  {
-    name: 'SnowGlobe',
-    shortDescription: 'Lead gen intelligence across Reddit, HN, and RSS.',
-    url: 'https://globe.snowforge.dev',
-    color: '#10b981',
-    icon: Globe,
   },
   {
     name: 'SnowFort',

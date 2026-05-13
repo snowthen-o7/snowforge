@@ -11,7 +11,7 @@ const VALUES: Value[] = [
     icon: '🔑',
     title: 'One account, every app',
     body:
-      'Sign in once. It already works today across every app in the suite. SnowPipe, SnowScrape, SnowGen, SnowGlobe, SnowFort, and TrueIce share the same login.',
+      'Sign in once. It already works today across every app in the suite. SnowPipe, SnowScrape, SnowGen, SnowFort, and TrueIce share the same login.',
   },
   {
     icon: '⚒',
