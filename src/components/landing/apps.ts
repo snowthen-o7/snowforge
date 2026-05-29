@@ -52,7 +52,7 @@ export const APPS: AppEntry[] = [
   {
     name: 'TrueIce',
     shortDescription: 'Advanced League of Legends match history and analytics.',
-    url: 'https://trueice.snowforge.dev',
+    url: 'https://lol.snowforge.dev',
     color: '#06b6d4',
     icon: Swords,
   },

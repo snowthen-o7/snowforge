@@ -14,7 +14,7 @@ SnowForge is the umbrella for a small portfolio of focused SaaS apps and develop
 
 - [SnowFort](https://fort.snowforge.dev): Fortnite item shop tracker. Daily shop monitoring, item-return alerts, full cosmetic catalog (17,000+ items), Discord bot, free tier plus paid Premium ($4/month).
 
-- [TrueIce](https://trueice.snowforge.dev): League of Legends match history and analytics.
+- [TrueIce](https://lol.snowforge.dev): League of Legends match history and analytics.
 
 - [SnowSports](https://sports.snowforge.dev): Sports analytics and data visualization.
 

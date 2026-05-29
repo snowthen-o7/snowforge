@@ -90,7 +90,7 @@ const organizationJsonLd = {
     'https://gen.snowforge.dev',
     'https://globe.snowforge.dev',
     'https://fort.snowforge.dev',
-    'https://trueice.snowforge.dev',
+    'https://lol.snowforge.dev',
   ],
 }
 
