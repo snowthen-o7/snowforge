@@ -11,6 +11,12 @@ export const metadata: Metadata = {
 
 const posts = [
   {
+    slug: 'common-gmc-disapprovals',
+    title: "The Google Merchant Center disapprovals that quietly cost you sales",
+    dek: "Five disapproval reasons account for most of the lost revenue in Merchant Center. Here is what each one really means and the fix that actually scales.",
+    date: '2026-06-10',
+  },
+  {
     slug: 'indie-cloud-cost',
     title: 'The cost of indie cloud: my real bill across 7 apps',
     dek: 'Real numbers from a seven-app portfolio in May 2026, the three incidents that drove the bill up, and the fixes that brought it back down.',
