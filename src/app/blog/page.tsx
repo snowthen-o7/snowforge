@@ -11,6 +11,12 @@ export const metadata: Metadata = {
 
 const posts = [
   {
+    slug: 'reading-league-meta-from-data',
+    title: "Reading the League of Legends meta from match data, not vibes",
+    dek: "Win rate, pick rate, and ban rate tell a real story, but only if you read them with sample size, rank, and patch timing in mind.",
+    date: '2026-06-12',
+  },
+  {
     slug: 'common-gmc-disapprovals',
     title: "The Google Merchant Center disapprovals that quietly cost you sales",
     dek: "Five disapproval reasons account for most of the lost revenue in Merchant Center. Here is what each one really means and the fix that actually scales.",
