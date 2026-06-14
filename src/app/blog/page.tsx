@@ -11,6 +11,12 @@ export const metadata: Metadata = {
 
 const posts = [
   {
+    slug: 'feed-rules-by-channel',
+    title: "One product feed, three rule sets: Google, Meta, and TikTok",
+    dek: "You build the feed once, but Google Shopping, Meta Commerce, and TikTok each reject it for different reasons. Here is where the rules actually diverge.",
+    date: '2026-06-14',
+  },
+  {
     slug: 'reading-league-meta-from-data',
     title: "Reading the League of Legends meta from match data, not vibes",
     dek: "Win rate, pick rate, and ban rate tell a real story, but only if you read them with sample size, rank, and patch timing in mind.",
