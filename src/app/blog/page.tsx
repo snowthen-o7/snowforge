@@ -11,6 +11,12 @@ export const metadata: Metadata = {
 
 const posts = [
   {
+    slug: 'scanning-mtg-cards-ocr',
+    title: "Scanning a Magic: The Gathering collection with a phone camera: the OCR reality",
+    dek: "Reading a card name off a phone camera sounds trivial. The edge cases are where a collection scanner actually lives or dies.",
+    date: '2026-06-16',
+  },
+  {
     slug: 'feed-rules-by-channel',
     title: "One product feed, three rule sets: Google, Meta, and TikTok",
     dek: "You build the feed once, but Google Shopping, Meta Commerce, and TikTok each reject it for different reasons. Here is where the rules actually diverge.",
