@@ -11,6 +11,12 @@ export const metadata: Metadata = {
 
 const posts = [
   {
+    slug: 'shopping-feed-anatomy',
+    title: "A field-by-field anatomy of a Google Shopping product feed",
+    dek: "What every required and recommended attribute actually does, and the gotcha hiding in each one.",
+    date: '2026-06-18',
+  },
+  {
     slug: 'scanning-mtg-cards-ocr',
     title: "Scanning a Magic: The Gathering collection with a phone camera: the OCR reality",
     dek: "Reading a card name off a phone camera sounds trivial. The edge cases are where a collection scanner actually lives or dies.",
