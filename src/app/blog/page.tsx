@@ -11,6 +11,12 @@ export const metadata: Metadata = {
 
 const posts = [
   {
+    slug: 'nba-injury-reports-signal',
+    title: "NBA injury reports as a market signal: what the data does and does not say",
+    dek: "Injury designations carry real information, but the edge is in the timing and the noise, not the obvious headline.",
+    date: '2026-06-20',
+  },
+  {
     slug: 'shopping-feed-anatomy',
     title: "A field-by-field anatomy of a Google Shopping product feed",
     dek: "What every required and recommended attribute actually does, and the gotcha hiding in each one.",
