@@ -11,6 +11,12 @@ export const metadata: Metadata = {
 
 const posts = [
   {
+    slug: 'product-feed-refresh-cadence',
+    title: "How often should your product feed actually refresh?",
+    dek: "More often is the wrong default. The right cadence depends on what changes, what the channel does with it, and what it costs you.",
+    date: '2026-06-22',
+  },
+  {
     slug: 'nba-injury-reports-signal',
     title: "NBA injury reports as a market signal: what the data does and does not say",
     dek: "Injury designations carry real information, but the edge is in the timing and the noise, not the obvious headline.",
