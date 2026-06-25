@@ -11,6 +11,12 @@ export const metadata: Metadata = {
 
 const posts = [
   {
+    slug: 'faceless-video-pipelines',
+    title: "Faceless video pipelines: what scales and what just burns money",
+    dek: "Automated short-form video is sold as passive income. The pipeline is real, but the cost cliffs are not where people expect.",
+    date: '2026-06-24',
+  },
+  {
     slug: 'product-feed-refresh-cadence',
     title: "How often should your product feed actually refresh?",
     dek: "More often is the wrong default. The right cadence depends on what changes, what the channel does with it, and what it costs you.",
