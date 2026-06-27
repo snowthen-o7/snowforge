@@ -11,6 +11,12 @@ export const metadata: Metadata = {
 
 const posts = [
   {
+    slug: 'polite-web-scraping',
+    title: "The polite, legal way to scrape public web data",
+    dek: "Most web scraping is legitimate. The difference between responsible data collection and getting banned is in how you do it.",
+    date: '2026-06-26',
+  },
+  {
     slug: 'faceless-video-pipelines',
     title: "Faceless video pipelines: what scales and what just burns money",
     dek: "Automated short-form video is sold as passive income. The pipeline is real, but the cost cliffs are not where people expect.",
