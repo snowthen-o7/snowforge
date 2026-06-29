@@ -11,6 +11,12 @@ export const metadata: Metadata = {
 
 const posts = [
   {
+    slug: 'running-seven-apps-solo',
+    title: "Running seven apps solo: the systems that make it survivable",
+    dek: "One person, seven apps, nights and weekends. It only works because of systems, not heroics. Here are the ones that carry the weight.",
+    date: '2026-06-28',
+  },
+  {
     slug: 'polite-web-scraping',
     title: "The polite, legal way to scrape public web data",
     dek: "Most web scraping is legitimate. The difference between responsible data collection and getting banned is in how you do it.",
