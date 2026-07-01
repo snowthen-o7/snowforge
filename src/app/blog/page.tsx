@@ -11,6 +11,12 @@ export const metadata: Metadata = {
 
 const posts = [
   {
+    slug: 'selectors-xpath-or-llm',
+    title: "CSS selectors, XPath, or an LLM: choosing how to extract",
+    dek: "Three ways to pull structured data off a page, each with a real sweet spot. Here is how to pick without overpaying or over-engineering.",
+    date: '2026-06-30',
+  },
+  {
     slug: 'running-seven-apps-solo',
     title: "Running seven apps solo: the systems that make it survivable",
     dek: "One person, seven apps, nights and weekends. It only works because of systems, not heroics. Here are the ones that carry the weight.",
