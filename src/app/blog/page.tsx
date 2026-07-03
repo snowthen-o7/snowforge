@@ -11,6 +11,12 @@ export const metadata: Metadata = {
 
 const posts = [
   {
+    slug: 'merchant-center-misrepresentation',
+    title: "The Merchant Center 'Misrepresentation' flag is about your storefront, not your feed",
+    dek: "The most feared account-level suspension and the most misdiagnosed. It almost never comes from the feed. Here is the storefront checklist.",
+    date: '2026-07-02',
+  },
+  {
     slug: 'selectors-xpath-or-llm',
     title: "CSS selectors, XPath, or an LLM: choosing how to extract",
     dek: "Three ways to pull structured data off a page, each with a real sweet spot. Here is how to pick without overpaying or over-engineering.",
