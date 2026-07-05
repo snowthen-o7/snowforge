@@ -11,6 +11,12 @@ export const metadata: Metadata = {
 
 const posts = [
   {
+    slug: 'why-scrapers-get-blocked',
+    title: "Why your scraper keeps getting blocked",
+    dek: "Blocks are rarely random. Sites block behavior, not scraping. Fix the behavior and most of them disappear.",
+    date: '2026-07-04',
+  },
+  {
     slug: 'merchant-center-misrepresentation',
     title: "The Merchant Center 'Misrepresentation' flag is about your storefront, not your feed",
     dek: "The most feared account-level suspension and the most misdiagnosed. It almost never comes from the feed. Here is the storefront checklist.",
