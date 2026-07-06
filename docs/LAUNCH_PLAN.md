@@ -27,7 +27,7 @@ You already have the code. Package it. Sell it. This week.
 
 | Tool | Price | Source | Status |
 |------|-------|--------|--------|
-| Shopify JSONL Bulk Processor | $29-49 | Existing code + Feedonomics experience | Package this week |
+| Shopify JSONL Bulk Processor | $29-49 | Existing code + product-feed experience | Package this week |
 | Feed Diff / Regression Checker | $29-49 | Diaz Diff Checker (already built) | Repackage for Gumroad |
 | Meta Catalog Validator | $49-79 | Existing knowledge, build standalone | 1-2 weeks |
 | Data Feed Audit Template | $19-29 | Structured checklist + Sheets template | 2-3 days |

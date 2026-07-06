@@ -118,4 +118,4 @@ Ranked by SEO opportunity × ease. Grounded in Alex's genuine expertise (Shopify
 - **Decide the `/` vs `/blog` overlap.** Both now render the same index. I set a self-canonical on `/blog` and kept it as a conventional archive; the homepage is the SEO-primary. If Alex prefers, `/blog` could `redirect('/')` instead — left as-is to keep `/blog` linkable and non-destructive.
 - **Write the Tier-1 outlined articles** (section 4) — outlines only were produced, per the "no fake filler" constraint.
 - **Drip system:** `content-queue/queue.json` is now empty. If Alex wants the 2-day drip to continue, add new drafts to the queue; otherwise the autobuild drip step will simply no-op.
-- **Unrelated flag (not changed):** `docs/LAUNCH_PLAN.md` contains a "Feedonomics" reference. It's an internal planning doc, not public-facing content, so it was left untouched — but noting it since the no-mention rule is strict.
+- **Resolved:** a day-job reference in `docs/LAUNCH_PLAN.md` was scrubbed to a neutral "product-feed experience" phrasing, per the strict no-mention rule.
