@@ -1,8 +1,13 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import Image from 'next/image'
+import { Workflow } from 'lucide-react'
 import { LandingFooter } from '@/components/landing/LandingFooter'
 import { LandingHeader } from '@/components/landing/LandingHeader'
+import { WhySnowForge } from '@/components/landing/WhySnowForge'
+import { FeaturedApp } from '@/components/landing/FeaturedApp'
+import { AppGrid } from '@/components/landing/AppGrid'
+import { Faq } from '@/components/landing/Faq'
 
 export const metadata: Metadata = {
   title: 'About · SnowForge',
@@ -108,6 +113,17 @@ export default function AboutPage() {
           </p>
         </div>
       </article>
+
+      <FeaturedApp
+        name="SnowPipe"
+        body="The flagship. Product feed orchestration for Shopify, Meta, and Google Merchant, built by someone who's been drowning in feed bugs for a decade. Free tier, paid plans, live today."
+        href="https://pipe.snowforge.dev"
+        ctaText="Try SnowPipe →"
+        icon={Workflow}
+      />
+      <AppGrid />
+      <WhySnowForge />
+      <Faq />
       <LandingFooter />
     </main>
   )
