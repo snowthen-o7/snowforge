@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 export function LandingHeader() {
   return (
@@ -20,6 +21,7 @@ export function LandingHeader() {
           <Link href="/contact" className="hover:text-foreground transition-colors">
             Contact
           </Link>
+          <ThemeToggle />
         </nav>
       </div>
     </header>
