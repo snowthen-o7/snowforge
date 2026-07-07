@@ -67,10 +67,24 @@ export const POSTS: Post[] = [
     date: '2026-06-28',
   },
   {
+    slug: 'gtin-mpn-brand-identifier-rules',
+    title:
+      'GTIN, MPN, and brand: the identifier rules that get products disapproved',
+    dek: 'The identifier_exists and invalid-GTIN disapprovals decoded, with the decision tree for when each identifier is required, optional, or correctly absent.',
+    date: '2026-06-27',
+  },
+  {
     slug: 'polite-web-scraping',
     title: 'The polite, legal way to scrape public web data',
     dek: 'Most web scraping is legitimate. The difference between responsible data collection and getting banned is in how you do it.',
     date: '2026-06-26',
+  },
+  {
+    slug: 'fixing-price-mismatch-disapprovals',
+    title:
+      "Fixing 'price mismatch' disapprovals for good (currency, tax, and sale timing)",
+    dek: 'The three real causes of price-mismatch disapprovals, how Google actually compares your feed against the landing page, and how to make them agree.',
+    date: '2026-06-25',
   },
   {
     slug: 'faceless-video-pipelines',
@@ -79,16 +93,37 @@ export const POSTS: Post[] = [
     date: '2026-06-24',
   },
   {
+    slug: 'google-product-category-vs-product-type',
+    title:
+      'google_product_category vs product_type: which one actually affects your ads',
+    dek: 'One is Google’s taxonomy and one is yours. Here is what each field really does, and how miscategorization quietly tanks performance.',
+    date: '2026-06-23',
+  },
+  {
     slug: 'product-feed-refresh-cadence',
     title: 'How often should your product feed actually refresh?',
     dek: 'More often is the wrong default. The right cadence depends on what changes, what the channel does with it, and what it costs you.',
     date: '2026-06-22',
   },
   {
+    slug: 'custom-labels-shopping-campaigns',
+    title:
+      'Custom labels for Shopping campaigns: a segmentation scheme that scales',
+    dek: 'How to use custom_label_0 through custom_label_4 for margin, season, and velocity bidding without turning your feed into a mess of one-off flags.',
+    date: '2026-06-21',
+  },
+  {
     slug: 'nba-injury-reports-signal',
     title: 'NBA injury reports as a market signal: what the data does and does not say',
     dek: 'Injury designations carry real information, but the edge is in the timing and the noise, not the obvious headline.',
     date: '2026-06-20',
+  },
+  {
+    slug: 'shopify-metafields-to-feed-attributes',
+    title:
+      'Shopify metafields to product feed attributes: the mapping that actually works',
+    dek: 'Piping Shopify metafields into material, color, size, age_group, and GTIN feed fields cleanly, including the traps that break the mapping.',
+    date: '2026-06-19',
   },
   {
     slug: 'shopping-feed-anatomy',
