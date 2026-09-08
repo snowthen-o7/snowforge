@@ -2602,6 +2602,168 @@ git commit -m "fix: infra blocks re-fired on every edit, and a cache failure dis
 
 ---
 
+## Task 13: Infrastructure classification and a budget set from measurement
+
+Found by the hook's first live firing, which blocked a real session with a false `fail`.
+SnowPipe's browser tier ran, Playwright's `global-setup.ts` called `clerkSetup()`, and Clerk
+returned `Unauthorized` — the `sk_test_` key in `.env` is present but rejected. The code was
+fine. `runAll` saw a non-zero exit and reported `fail`, which tells the operator their work
+is broken and trains them to distrust the hook.
+
+The spec's rule was "infrastructure failure is never a `pass`". The corollary was missing:
+**it must never be a `fail` either.** Preflight cannot close this by prediction — the key is
+present, so only a live API call would know, and that would add latency to every browser run
+while still missing the next unanticipated cause. Classification after the fact is cheaper
+and catches the general case.
+
+**Files:**
+- Modify: `snowforge-verify/src/manifest.mjs`, `snowforge-verify/src/cli.mjs`
+- Modify: `SnowPipe/.claude/verify.json`
+- Test: `snowforge-verify/tests/manifest.test.mjs`, `snowforge-verify/tests/cli.test.mjs`
+
+- [ ] **Step 1: Write the failing tests**
+
+In `tests/manifest.test.mjs`:
+
+```javascript
+  it('accepts an infrastructure classification list', () => {
+    const raw = JSON.stringify({
+      surfaces: {},
+      infrastructure: [{ match: 'ClerkAPIResponseError', remedy: 'refresh the key' }],
+    });
+    const r = loadManifest('/repo', read(raw));
+    expect(r.ok).toBe(true);
+    expect(r.manifest.infrastructure).toHaveLength(1);
+  });
+
+  it('defaults infrastructure to an empty array', () => {
+    expect(loadManifest('/repo', read('{"surfaces":{}}')).manifest.infrastructure).toEqual([]);
+  });
+
+  it('rejects a malformed infrastructure entry', () => {
+    for (const bad of ['"x"', '[{"match":1,"remedy":"r"}]', '[{"match":"m"}]', '[{"remedy":"r"}]']) {
+      const r = loadManifest('/repo', read(`{"surfaces":{},"infrastructure":${bad}}`));
+      expect(r.ok).toBe(false);
+      expect(r.reason).toMatch(/infrastructure/);
+    }
+  });
+```
+
+In `tests/cli.test.mjs`:
+
+```javascript
+  // A tooling failure must not be reported as a code defect. It still blocks —
+  // it is never a pass — but it names the remedy instead of blaming the work.
+  it('reclassifies a matching failure as blocked with its remedy', () => {
+    const r = main(input, deps({
+      loadManifest: () => ({
+        ok: true,
+        manifest: {
+          repo: 'SnowPipe',
+          surfaces: { 'src/**': { tier: 'fast', run: 'pnpm test' } },
+          always: null, unverified: {}, ignore: [],
+          infrastructure: [{ match: 'ClerkAPIResponseError', remedy: 'Clerk key rejected; refresh it' }],
+          budgets: { fast: 120, browser: 360, full: 900 },
+        },
+      }),
+      runAll: () => ({
+        verdict: 'fail', failed: 'pnpm test:e2e',
+        output: 'ClerkAPIResponseError: Unauthorized', seconds: 9,
+      }),
+    }));
+    expect(r.exitCode).toBe(2);
+    expect(r.stderr).toContain('VERIFY BLOCKED');
+    expect(r.stderr).toContain('Clerk key rejected; refresh it');
+    expect(r.stderr).not.toContain('VERIFY FAILED');
+  });
+
+  it('leaves a genuine failure classified as a failure', () => {
+    const r = main(input, deps({
+      runAll: () => ({ verdict: 'fail', failed: 'pnpm test', output: 'AssertionError: 47 !== 50', seconds: 4 }),
+    }));
+    expect(r.exitCode).toBe(2);
+    expect(r.stderr).toContain('VERIFY FAILED');
+  });
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `pnpm test`
+Expected: the manifest tests fail (`infrastructure` is not a field yet) and the
+reclassification test fails (the failure is still reported as `VERIFY FAILED`).
+
+- [ ] **Step 3: Implement**
+
+In `src/manifest.mjs`, validate the new optional field alongside the others:
+
+```javascript
+  if (parsed.infrastructure !== undefined) {
+    if (!Array.isArray(parsed.infrastructure)) {
+      return { ok: false, reason: '"infrastructure" must be an array' };
+    }
+    for (const e of parsed.infrastructure) {
+      if (!isPlainObject(e) || typeof e.match !== 'string' || typeof e.remedy !== 'string') {
+        return { ok: false, reason: '"infrastructure" entries need string "match" and "remedy"' };
+      }
+    }
+  }
+```
+
+and carry it through: `infrastructure: parsed.infrastructure ?? []`.
+
+In `src/cli.mjs`, immediately after `const result = d.runAll(...)`:
+
+```javascript
+    // A non-zero exit is not by itself evidence of a defect. If the output
+    // names a known tooling failure, this is an inability to verify, not a
+    // verdict on the code — so it blocks with a remedy rather than blaming
+    // the work. It is still never a pass.
+    let outcome = result;
+    if (result.verdict === 'fail') {
+      const hit = manifest.infrastructure.find((e) => result.output.includes(e.match));
+      if (hit) {
+        outcome = { ...result, verdict: 'blocked', remedy: hit.remedy };
+      }
+    }
+```
+
+Use `outcome` in place of `result` for the verdict, the cache write and the report. When
+`outcome.remedy` is set, emit `VERIFY BLOCKED  <repo>  <tier>` followed by the remedy line
+instead of `formatFailure`.
+
+- [ ] **Step 4: Update SnowPipe's manifest**
+
+Raise the fast budget and declare the known tooling failures. The budget comes from
+measurement, not a guess: three runs of the identical tree took 31s, 46s and 114.66s — a
+3.7x spread driven by cache state. A 120s ceiling returns `blocked` on an unlucky run, so it
+is set to 300s, comfortably under the hook's 540s timeout.
+
+```jsonc
+  "budgets": { "fast": 300, "browser": 360, "full": 900 },
+  "infrastructure": [
+    { "match": "ClerkAPIResponseError",
+      "remedy": "Clerk rejected the testing token. CLERK_SECRET_KEY in .env is present but unauthorized - refresh or rotate it, then re-run." },
+    { "match": "Failed to fetch testing token from Clerk API",
+      "remedy": "Clerk testing token unavailable. Check CLERK_SECRET_KEY, or run under `doppler run --`." },
+    { "match": "Executable doesn't exist at",
+      "remedy": "Playwright browser binary missing. Run: pnpm exec playwright install chromium" },
+    { "match": "Environment variable not found: DATABASE_URL",
+      "remedy": "DATABASE_URL is Doppler-sourced. Run under `doppler run --`." }
+  ]
+```
+
+- [ ] **Step 5: Run the full suite and commit**
+
+```bash
+pnpm test
+git add src/manifest.mjs src/cli.mjs tests/manifest.test.mjs tests/cli.test.mjs
+git commit -m "feat: classify tooling failures as blocked rather than as defects"
+```
+
+Then commit SnowPipe's manifest separately in that repo.
+
+---
+
 ## Rollback
 
 If the hook proves disruptive, remove the `hooks` key from `C:\Users\alexi\.claude\settings.json` or restore `settings.json.bak-verify-hook`. The dispatcher stays installed and runnable by hand, and every manifest stays valid — nothing else depends on the hook being registered.

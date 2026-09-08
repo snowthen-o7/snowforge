@@ -282,6 +282,7 @@ unverifiable change becomes an escalation instead of a false completion.
 | Dev server port in use | `blocked` + the offending PID. |
 | Non-Node repo (RiftMind) | `run` is an arbitrary shell string; nothing assumes pnpm. |
 | Windows path and glob handling | Paths normalized to repo-relative POSIX before matching. |
+| Huge change set right after a large merge | **Known limitation, not fixed.** Measured 2026-09-08: merging 108 commits from `claude-main` into `main` without pushing left `main` 72 commits above its upstream, so the change set became 182 files with 25 under `src/app/**` — enough to fire the browser tier on essentially any edit. The upstream definition is still correct; the condition is transient and collapses to 0 the moment the branch is pushed. A session-start baseline would fix it properly, but building one on a state that resolves itself is speculative. Revisit if it recurs outside of a merge. |
 | Huge change set on long-lived `claude-main` | Change set is the branch's own **upstream** (`@{u}`) to `HEAD`, plus the working tree, falling back to `merge-base origin/main HEAD` only when the branch has no upstream. Measured on SnowPipe 2026-09-08: the merge-base definition returned 180 files on a clean tree, because `claude-main` carries 69 commits not on `origin/main` and that set never shrinks — which would pin `src/app/**` in the change set permanently and route every edit to the browser tier. The upstream definition returned 0, which is correct. |
 
 ## 11. Testing the Standard
