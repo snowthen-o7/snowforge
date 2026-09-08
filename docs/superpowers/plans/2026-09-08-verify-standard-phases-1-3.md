@@ -2130,11 +2130,36 @@ Then append the rest to the bottom of `src/run.mjs`:
 ```javascript
 const defaultChecks = {
   fileExists: (p) => existsSync(p),
+
+  /**
+   * Whether Playwright's browser binaries are actually on disk.
+   *
+   * `playwright --version` is emphatically NOT this check. It exits 0 whenever
+   * the npm package is present and says nothing about whether any browser was
+   * ever downloaded — measured on this host, it printed `Version 1.58.2` while
+   * proving nothing. A machine with the package but no binaries would pass
+   * preflight, fail at browser launch, and be reported as `fail`, blaming the
+   * code for missing tooling. That is the exact misdiagnosis preflight exists
+   * to prevent.
+   *
+   * `install --dry-run` reports a resolved `Install location:` per browser and
+   * honours PLAYWRIGHT_BROWSERS_PATH, so those paths can be checked on disk.
+   *
+   * If the output cannot be parsed at all, this returns true and lets the run
+   * proceed. An unhelpful message is a smaller cost than blocking a repo whose
+   * browsers are fine, and a genuine launch failure still surfaces as `fail`,
+   * which blocks. Nothing here can turn into a silent pass.
+   */
   browsersInstalled: (repoRoot) => {
-    const r = spawnSync('pnpm exec playwright --version', {
-      cwd: repoRoot, shell: true, encoding: 'utf8', timeout: 20000,
+    const r = spawnSync('pnpm exec playwright install --dry-run', {
+      cwd: repoRoot, shell: true, encoding: 'utf8', timeout: 60000,
     });
-    return r.status === 0;
+    if (r.status !== 0) return false;
+    const locations = [...String(r.stdout).matchAll(/Install location:\s*(.+)/g)]
+      .map((m) => m[1].trim())
+      .filter(Boolean);
+    if (locations.length === 0) return true; // cannot determine; do not block
+    return locations.some((p) => existsSync(p));
   },
 };
 
