@@ -1884,7 +1884,20 @@ async function collect<T>(gen: AsyncGenerator<T>): Promise<T[]> {
   return out;
 }
 
-const RECORDS = [
+/**
+ * `filterRecordsStream` takes an AsyncIterable, not an array. A plain array
+ * would run fine — `for await` accepts sync iterables — but would fail
+ * `tsc --noEmit`, which is the very command this repo's verify manifest runs
+ * as its `always` floor. A type error here would break SnowPipe verification
+ * on every single run.
+ */
+async function* stream(
+  records: Record<string, unknown>[],
+): AsyncGenerator<Record<string, unknown>> {
+  for (const r of records) yield r;
+}
+
+const RECORDS: Record<string, unknown>[] = [
   { id: '1', tags: 'snowpipe-test', title: 'Lodge Skillet' },
   { id: '2', tags: 'other', title: 'Vitamix Blender' },
   { id: '3', tags: 'snowpipe-test', title: 'OXO Peeler' },
@@ -1913,16 +1926,16 @@ describe('#82: exportFilters shape contract', () => {
 
   it('actually drops non-matching records for the bare-array shape', async () => {
     const config = normalizeExportFilters([CONDITION])!;
-    const kept = await collect(filterRecordsStream(RECORDS, config));
+    const kept = await collect(filterRecordsStream(stream(RECORDS), config));
     expect(kept.map((r) => r.id)).toEqual(['1', '3']);
   });
 
   it('produces identical results for both persisted shapes', async () => {
     const fromArray = await collect(
-      filterRecordsStream(RECORDS, normalizeExportFilters([CONDITION])!),
+      filterRecordsStream(stream(RECORDS), normalizeExportFilters([CONDITION])!),
     );
     const fromWrapped = await collect(
-      filterRecordsStream(RECORDS, normalizeExportFilters({ conditions: [CONDITION] })!),
+      filterRecordsStream(stream(RECORDS), normalizeExportFilters({ conditions: [CONDITION] })!),
     );
     expect(fromArray).toEqual(fromWrapped);
   });
@@ -1933,6 +1946,11 @@ describe('#82: exportFilters shape contract', () => {
 
 Run: `pnpm vitest run tests/regression/export-filters-82.test.ts`
 Expected: PASS. #82 is already fixed (commit `5a6b84c`), so this test documents and locks the contract. **If it fails, stop and report** — that means the fix regressed, which is itself the finding.
+
+Then typecheck it, which vitest does not do:
+
+Run: `pnpm exec tsc --noEmit`
+Expected: no new errors from `tests/regression/export-filters-82.test.ts`. This matters more than it looks: the manifest written in Step 5 runs `pnpm exec tsc --noEmit` as its `always` floor, so a type error introduced here would fail SnowPipe verification on every future run. A runtime-green but type-red test would quietly break the thing this task exists to install.
 
 - [ ] **Step 4: Prove the test would have caught #82**
 
