@@ -2500,7 +2500,16 @@ const defaultLogVerdict = (line) => {
   appendFileSync(path.join(CACHE_DIR, 'verify.log'), `${line}\n`, 'utf8');
 };
 
-/** Cache key for a block whose cause no code edit can clear. */
+/**
+ * Cache key for a block whose cause no code edit can clear.
+ *
+ * An infra block records ONLY this key, never the code-state key as well. The
+ * sentinel already covers both cases: it is checked inside the block branch,
+ * which is reached whenever the state-key check falls through — so it stops a
+ * repeat for the same code state and for a changed one alike. Writing both
+ * would be a redundant second cache write that buys nothing and doubles the
+ * failure surface of the write itself.
+ */
 const infraKey = (cause, repoRoot) => `infra:${cause}:${repoRoot}`;
 ```
 
@@ -2538,8 +2547,7 @@ In the manifest-failure branch, before recording and returning:
       const ik = infraKey('manifest', repoRoot);
       if (d.readVerdict(hookInput.session_id, ik) !== null) return NO_OP;
       record(ik, 'blocked');
-      record(key, 'blocked');
-      note(manifestRepoName(repoRoot), '-', 'blocked', 0);
+      note(path.basename(repoRoot), '-', 'blocked', 0);
 ```
 
 where `manifestRepoName` is simply `path.basename(repoRoot)` — the manifest did not load, so
@@ -2551,12 +2559,34 @@ In the preflight-failure branch, the same shape with a tier-specific cause:
       const ik = infraKey(`preflight:${plan.tier}`, repoRoot);
       if (d.readVerdict(hookInput.session_id, ik) !== null) return NO_OP;
       record(ik, 'blocked');
-      record(key, 'blocked');
       note(manifest.repo, plan.tier, 'blocked', 0);
 ```
 
 Call `note(...)` on the remaining terminal paths: the deferred branch, the pass branch
 (passing `plan.disclosures`), and the fail/blocked branch after `runAll`.
+
+- [ ] **Step 3b: Update two now-stale assertions from Task 8**
+
+Task 8 wrote these when a missing manifest was recorded against the code-state key. That is
+no longer where it goes, so their expectations are stale — the behaviour they exist to pin
+(a verdict IS recorded before blocking) is unchanged, only the key. In
+`tests/cli.test.mjs`, replace the assertion line in each of
+`records a verdict when blocking on a missing manifest` and
+`records a verdict when blocking on an invalid manifest`:
+
+```javascript
+    // was: expect(written).toEqual([['key1', 'blocked']]);
+    expect(written).toHaveLength(1);
+    expect(written[0][0]).toMatch(/^infra:manifest:/);
+    expect(written[0][1]).toBe('blocked');
+```
+
+Matching the prefix rather than the whole key keeps the assertion honest without pinning an
+absolute Windows path into a test.
+
+Leave `does not block a missing manifest twice for the same state` alone — its
+`readVerdict: () => 'blocked'` fake answers for any key, so it still exercises what it
+always did.
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
