@@ -215,7 +215,9 @@ git commit -m "feat: scaffold @snowforge/verify with repo detection and scope gu
 
 **Interfaces:**
 - Consumes: `toPosix` from `src/repo.mjs`.
-- Produces: `getChangedFiles(repoRoot: string, git = runGit): string[]` — repo-relative POSIX paths, deduped and sorted. Union of the working tree and commits since the merge-base with `origin/main`. `runGit(repoRoot: string, args: string[]): string` — thin `execFileSync` wrapper returning stdout, or `''` on non-zero exit.
+- Produces: `getChangedFiles(repoRoot: string, git = runGit): string[]` — repo-relative POSIX paths, deduped and sorted. Union of the working tree and the commits this branch carries beyond its own **upstream** (`@{u}`), falling back to the merge-base with `origin/main` only when the branch has no upstream. `runGit(repoRoot: string, args: string[]): string` — thin `execFileSync` wrapper returning stdout, or `''` on non-zero exit.
+
+**Why upstream and not `origin/main`:** measured on SnowPipe 2026-09-08, a merge-base-with-`origin/main` definition returned 180 files on a completely clean tree, because `claude-main` carries 69 commits not yet on `main` and that set never shrinks. It would pin `src/app/**` in the change set permanently, routing every edit to the browser tier and running the full Playwright suite on every stop. Against the branch's upstream the same repo returned 0 files, which is the correct answer for "nothing new in this line of work."
 
 - [ ] **Step 1: Write the failing test**
 
@@ -225,16 +227,21 @@ git commit -m "feat: scaffold @snowforge/verify with repo detection and scope gu
 import { describe, it, expect } from 'vitest';
 import { getChangedFiles } from '../src/changes.mjs';
 
-/** Fake git: returns canned stdout per subcommand. */
-function fakeGit(responses) {
-  return (_root, args) => responses[args[0]] ?? '';
+/** Fake git: returns canned stdout per subcommand. Records the args it saw. */
+function fakeGit(responses, calls = []) {
+  const fn = (_root, args) => {
+    calls.push(args);
+    return responses[args[0]] ?? '';
+  };
+  fn.calls = calls;
+  return fn;
 }
 
 describe('getChangedFiles', () => {
   it('unions working tree and committed changes, deduped and sorted', () => {
     const git = fakeGit({
       status: ' M src/b.ts\n?? src/a.ts\n',
-      'merge-base': 'abc123\n',
+      'rev-parse': 'origin/claude-main\n',
       diff: 'src/b.ts\nsrc/c.ts\n',
     });
     expect(getChangedFiles('/repo', git)).toEqual([
@@ -244,28 +251,52 @@ describe('getChangedFiles', () => {
     ]);
   });
 
+  it('diffs against the branch upstream, not origin/main, when an upstream exists', () => {
+    const git = fakeGit({
+      status: '',
+      'rev-parse': 'origin/claude-main\n',
+      diff: 'src/x.ts\n',
+    });
+    getChangedFiles('/repo', git);
+    const diffCall = git.calls.find((a) => a[0] === 'diff');
+    expect(diffCall).toEqual(['diff', '--name-only', 'origin/claude-main...HEAD']);
+    expect(git.calls.some((a) => a[0] === 'merge-base')).toBe(false);
+  });
+
+  it('falls back to merge-base with origin/main when the branch has no upstream', () => {
+    const git = fakeGit({
+      status: '',
+      'rev-parse': '',
+      'merge-base': 'abc123\n',
+      diff: 'src/y.ts\n',
+    });
+    expect(getChangedFiles('/repo', git)).toEqual(['src/y.ts']);
+    const diffCall = git.calls.find((a) => a[0] === 'diff');
+    expect(diffCall).toEqual(['diff', '--name-only', 'abc123...HEAD']);
+  });
+
   it('normalizes backslashes to forward slashes', () => {
-    const git = fakeGit({ status: ' M src\\win\\file.ts\n', 'merge-base': '', diff: '' });
+    const git = fakeGit({ status: ' M src\\win\\file.ts\n', 'rev-parse': '', 'merge-base': '', diff: '' });
     expect(getChangedFiles('/repo', git)).toEqual(['src/win/file.ts']);
   });
 
   it('handles renames in porcelain output by taking the destination', () => {
-    const git = fakeGit({ status: 'R  old/x.ts -> new/x.ts\n', 'merge-base': '', diff: '' });
+    const git = fakeGit({ status: 'R  old/x.ts -> new/x.ts\n', 'rev-parse': '', 'merge-base': '', diff: '' });
     expect(getChangedFiles('/repo', git)).toEqual(['new/x.ts']);
   });
 
-  it('returns only working-tree changes when there is no merge-base', () => {
-    const git = fakeGit({ status: ' M only.ts\n', 'merge-base': '', diff: 'ignored.ts\n' });
+  it('returns only working-tree changes when neither upstream nor merge-base resolves', () => {
+    const git = fakeGit({ status: ' M only.ts\n', 'rev-parse': '', 'merge-base': '', diff: 'ignored.ts\n' });
     expect(getChangedFiles('/repo', git)).toEqual(['only.ts']);
   });
 
   it('returns an empty array when nothing changed', () => {
-    const git = fakeGit({ status: '', 'merge-base': 'abc\n', diff: '' });
+    const git = fakeGit({ status: '', 'rev-parse': 'origin/claude-main\n', diff: '' });
     expect(getChangedFiles('/repo', git)).toEqual([]);
   });
 
   it('strips quotes git adds around paths containing spaces', () => {
-    const git = fakeGit({ status: ' M "src/a b.ts"\n', 'merge-base': '', diff: '' });
+    const git = fakeGit({ status: ' M "src/a b.ts"\n', 'rev-parse': '', 'merge-base': '', diff: '' });
     expect(getChangedFiles('/repo', git)).toEqual(['src/a b.ts']);
   });
 });
@@ -318,12 +349,25 @@ function parseStatus(stdout) {
 
 /**
  * Repo-relative POSIX paths changed in this line of work: the working tree
- * plus every commit since the merge-base with origin/main.
+ * plus the commits this branch carries beyond its own upstream.
+ *
+ * Upstream, not origin/main, and the distinction is load-bearing. SnowForge
+ * agent branches like `claude-main` live for months and accumulate dozens of
+ * commits that main has never seen. Diffing against origin/main on such a
+ * branch returns every file touched since it was cut — measured at 180 files
+ * on a clean SnowPipe tree — and that set never shrinks, so the browser tier
+ * would fire on every stop forever. Diffing against the upstream collapses to
+ * the unpushed work, which is what "this line of work" means. Only a branch
+ * with no upstream at all falls back to the merge-base.
  */
 export function getChangedFiles(repoRoot, git = runGit) {
   const files = new Set(parseStatus(git(repoRoot, ['status', '--porcelain'])));
 
-  const base = git(repoRoot, ['merge-base', 'origin/main', 'HEAD']).trim();
+  let base = git(repoRoot, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']).trim();
+  if (!base) {
+    base = git(repoRoot, ['merge-base', 'origin/main', 'HEAD']).trim();
+  }
+
   if (base) {
     const committed = git(repoRoot, ['diff', '--name-only', `${base}...HEAD`]);
     for (const line of committed.split('\n')) {

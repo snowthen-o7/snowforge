@@ -258,7 +258,7 @@ unverifiable change becomes an escalation instead of a false completion.
 | Dev server port in use | `blocked` + the offending PID. |
 | Non-Node repo (RiftMind) | `run` is an arbitrary shell string; nothing assumes pnpm. |
 | Windows path and glob handling | Paths normalized to repo-relative POSIX before matching. |
-| Huge change set on long-lived `claude-main` | Change set is `merge-base origin/main HEAD` to `HEAD`, plus the working tree. Routing needs only the set of touched surfaces, not the diff itself. |
+| Huge change set on long-lived `claude-main` | Change set is the branch's own **upstream** (`@{u}`) to `HEAD`, plus the working tree, falling back to `merge-base origin/main HEAD` only when the branch has no upstream. Measured on SnowPipe 2026-09-08: the merge-base definition returned 180 files on a clean tree, because `claude-main` carries 69 commits not on `origin/main` and that set never shrinks — which would pin `src/app/**` in the change set permanently and route every edit to the browser tier. The upstream definition returned 0, which is correct. |
 
 ## 11. Testing the Standard
 
