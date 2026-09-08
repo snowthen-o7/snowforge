@@ -1983,18 +1983,25 @@ Expected: PASS again. Do not commit the temporary edit.
 {
   "repo": "SnowPipe",
   "surfaces": {
-    "src/server/streaming/**": { "tier": "fast", "run": "pnpm vitest run tests/regression tests/unit" },
-    "src/server/core/**": { "tier": "fast", "run": "pnpm vitest run tests/regression tests/unit" },
-    "backend-ion/**": { "tier": "fast", "run": "pnpm vitest run tests/regression tests/unit" },
+    "src/server/streaming/**": { "tier": "fast", "run": "pnpm vitest run tests/regression tests/unit --exclude \"**/plugin-refresh-access-token.test.ts\"" },
+    "src/server/core/**": { "tier": "fast", "run": "pnpm vitest run tests/regression tests/unit --exclude \"**/plugin-refresh-access-token.test.ts\"" },
+    "backend-ion/**": { "tier": "fast", "run": "pnpm vitest run tests/regression tests/unit --exclude \"**/plugin-refresh-access-token.test.ts\"" },
     "prisma/**": { "tier": "fast", "run": "pnpm prisma validate" },
     "src/app/**": { "tier": "browser", "run": "pnpm test:e2e" },
     "src/components/**": { "tier": "browser", "run": "pnpm test:e2e" }
   },
   "always": "pnpm exec tsc --noEmit",
   "unverified": {
+    "src/server/streaming/**": [
+      "tests/unit/plugin-refresh-access-token.test.ts, which needs DATABASE_URL from Doppler and is excluded from the hook-invoked run; check it with: doppler run -- pnpm vitest run tests/unit/plugin-refresh-access-token.test.ts"
+    ],
+    "src/server/core/**": [
+      "tests/unit/plugin-refresh-access-token.test.ts, which needs DATABASE_URL from Doppler and is excluded from the hook-invoked run; check it with: doppler run -- pnpm vitest run tests/unit/plugin-refresh-access-token.test.ts"
+    ],
     "backend-ion/**": [
       "the deployed Lambda runtime, SST deploy only (see #83, the ERR_REQUIRE_ESM cold-start crash)",
-      "live Google Merchant API behavior, covered only by the full tier"
+      "live Google Merchant API behavior, covered only by the full tier",
+      "tests/unit/plugin-refresh-access-token.test.ts, which needs DATABASE_URL from Doppler and is excluded from the hook-invoked run"
     ],
     "src/app/**": [
       "production Clerk auth; e2e runs against a stored session state"
@@ -2004,6 +2011,14 @@ Expected: PASS again. Do not commit the temporary edit.
   "ignore": ["**/*.md", "docs/**", "content/**", "exports/**", "playwright-report/**", "**/*.png"]
 }
 ```
+
+**Two things about that `--exclude` are load-bearing, both measured rather than assumed:**
+
+`tests/unit/plugin-refresh-access-token.test.ts` opens a Prisma connection and needs `DATABASE_URL`, which comes from Doppler and is absent in a plain shell. Run unmodified, the fast tier reports `1 failed | 260 passed` — so it would return `fail` on every verification of these surfaces, blaming correct code with a Prisma stack trace until the hook got switched off. Excluded, the same command is `260 passed (260)`, `4451 passed`, in 31.4s against a 120s budget.
+
+The pattern is wrapped in **double** quotes, not single. The dispatcher runs commands through `spawnSync(cmd, {shell: true})`, which on Windows is `cmd.exe`, where single quotes are ordinary characters rather than quoting. Measured directly: a single-quoted argument arrives as `"'**/foo.test.ts'"` with the quotes embedded, so vitest would match nothing and run the excluded test anyway. Double quotes behave correctly under both `cmd.exe` and POSIX shells.
+
+Excluding a test is a reduction in coverage, so it is declared in `unverified` on every surface that uses the command — the hook prints those lines on every pass, and they carry the Doppler command to run it properly.
 
 - [ ] **Step 6: Confirm the referenced test paths exist**
 
