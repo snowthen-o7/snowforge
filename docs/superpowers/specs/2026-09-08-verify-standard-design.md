@@ -283,12 +283,28 @@ Ordered so the riskiest assumption is tested first and nothing is enforced befor
 2. SnowPipe manifest. Playwright is already configured, and it owns the incidents that
    motivated this. Validate against the #82 regression.
 3. Register the `Stop` hook in user settings, scoped by the SnowForge guard.
-4. SnowCards manifest: Expo web browser tier, emulator full tier, `adb` on PATH.
-5. OnDeck manifest: api and worker fast tiers, Expo web browser tier, native `unverified`
-   block. Requires standing up a test setup in `apps/mobile`, which has none.
-6. Remaining web repos: SnowFort, SnowGlobe, SnowSite.
-7. Non-browser repos: SnowGen, SnowScrape, SnowTrader, SnowSports, RiftMind.
-8. `/verify-init` skill, then wire `SNOWFORGE_VERIFY_MODE=report` into the autobuild loop.
+4. **Opt-out manifests** (`{"surfaces":{}}`) in every SnowForge repo not yet onboarded, so
+   registering the hook does not nag across the whole workspace while onboarding proceeds
+   one repo at a time. `snowforge-verify` takes a real manifest instead — it has 112 tests
+   and the tool verifying itself costs nothing.
+
+**Re-sequenced 2026-09-08 on Alex's direction.** The original order put SnowPipe first
+because it already had Playwright configured and owned the #82 incident. SnowPipe is now
+backlogged; SnowCards and OnDeck are the active projects, with TrueIce a lesser third.
+SnowPipe's manifest stays as the proven reference implementation, not as the priority.
+
+5. **SnowCards** — the first real target. Expo web browser tier, Android emulator full tier,
+   `adb` on PATH. It already has jest and `@testing-library/react-native`, so the fast tier
+   has something to run on day one.
+6. **OnDeck** — api and worker fast tiers, Expo web browser tier, native `unverified` block.
+   This is the expensive one: `apps/mobile` has no test setup at all, so a harness has to be
+   stood up before a fast tier means anything. Budget for that separately rather than
+   discovering it mid-task.
+7. **TrueIce** — Playwright already configured, so it should be a near drop-in.
+8. Remaining repos as they become active: SnowFort, SnowGlobe, SnowSite, SnowGen,
+   SnowScrape, SnowTrader, SnowSports, RiftMind. SnowPipe's coverage extends here too when
+   it comes off the backlog.
+9. `/verify-init` skill, then wire `SNOWFORGE_VERIFY_MODE=report` into the autobuild loop.
 
 ## 13. Out of Scope
 
