@@ -788,6 +788,30 @@ describe('route', () => {
     expect(r.tier).toBe('skip');
     expect(r.runs).toEqual([]);
   });
+
+  // A 'fast' verdict with an empty run set would claim verification happened
+  // when nothing executed. The deferred command must still be reported.
+  it('reports skip, not fast, when the cap excludes everything and there is no always', () => {
+    const m = {
+      surfaces: { 'packages/db/**': { tier: 'full', run: 'pnpm db:verify' } },
+      always: null, unverified: {}, ignore: [],
+    };
+    const r = route(m, ['packages/db/a.sql', 'packages/db/b.sql'], 'browser');
+    expect(r.runs).toEqual([]);
+    expect(r.tier).toBe('skip');
+    expect(r.deferred).toEqual(['pnpm db:verify']);
+  });
+
+  it('reports fast when always runs even though the cap excluded every surface', () => {
+    const m = {
+      surfaces: { 'packages/db/**': { tier: 'full', run: 'pnpm db:verify' } },
+      always: 'pnpm typecheck', unverified: {}, ignore: [],
+    };
+    const r = route(m, ['packages/db/a.sql', 'packages/db/b.sql'], 'browser');
+    expect(r.runs).toEqual(['pnpm typecheck']);
+    expect(r.tier).toBe('fast');
+    expect(r.deferred).toEqual(['pnpm db:verify']);
+  });
 });
 ```
 
@@ -867,9 +891,12 @@ export function route(manifest, changedFiles, maxTier = 'full') {
     if (matchesAny(considered, glob)) disclosures.push(...notes);
   }
 
+  // `always` alone is a fast-tier floor — but only when `always` actually
+  // exists. Reporting 'fast' with an empty run set would tell a caller that
+  // fast verification happened when nothing ran at all.
   const highest = runnable.length
     ? runnable[runnable.length - 1].tier
-    : 'fast'; // `always` alone is a fast-tier floor
+    : (manifest.always ? 'fast' : 'skip');
 
   return { tier: highest, runs, disclosures, considered, deferred };
 }
@@ -1431,6 +1458,26 @@ describe('main', () => {
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toMatch(/verify.*error/i);
   });
+
+  // A repo whose only surface is full-tier runs nothing inside the hook. It
+  // must still say so, or it verifies nothing on every stop, silently.
+  it('reports deferred work instead of exiting silently when nothing runs in the hook', () => {
+    const r = main(input, deps({
+      getChangedFiles: () => ['packages/db/a.sql', 'packages/db/b.sql'],
+      loadManifest: () => ({
+        ok: true,
+        manifest: {
+          repo: 'SnowPipe',
+          surfaces: { 'packages/db/**': { tier: 'full', run: 'pnpm db:verify' } },
+          always: null, unverified: {}, ignore: ['**/*.md'],
+          budgets: { fast: 120, browser: 360, full: 900 },
+        },
+      }),
+    }));
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain('VERIFY DEFERRED');
+    expect(r.stdout).toContain('pnpm db:verify');
+  });
 });
 ```
 
@@ -1488,7 +1535,22 @@ export function main(hookInput, deps) {
     // The hook may never invoke the `full` tier: its 900s budget exceeds the
     // hook timeout, and a timed-out Stop hook fails open (spec §5).
     const plan = route(manifest, changed, d.maxTier);
-    if (plan.tier === 'skip' || plan.runs.length === 0) return NO_OP;
+    if (plan.runs.length === 0) {
+      // Nothing to run. If the cap deferred work, say so rather than exiting
+      // silently — a repo whose only surface is `full`-tier would otherwise
+      // verify nothing on every stop and never tell anyone.
+      if (plan.deferred.length) {
+        return {
+          exitCode: 0,
+          stderr: '',
+          stdout:
+            `VERIFY DEFERRED  ${manifest.repo}\n` +
+            `  nothing runs inside the hook for this change set.\n` +
+            `  run by hand: ${plan.deferred.join(', ')}`,
+        };
+      }
+      return NO_OP;
+    }
 
     const key = d.stateKey(repoRoot);
     if (d.readVerdict(hookInput.session_id, key) !== null) return NO_OP;
