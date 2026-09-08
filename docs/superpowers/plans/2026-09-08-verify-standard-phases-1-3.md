@@ -466,6 +466,82 @@ describe('loadManifest', () => {
     expect(r.manifest.ignore).toEqual([]);
     expect(r.manifest.unverified).toEqual({});
   });
+
+  // `null` is valid JSON. A truthiness check lets it through to a property
+  // read, which throws — and a throw here wedges the Stop hook.
+  it('rejects a null manifest without throwing', () => {
+    expect(() => loadManifest('/repo', read('null'))).not.toThrow();
+    expect(loadManifest('/repo', read('null'))).toEqual({
+      ok: false,
+      reason: 'verify.json must be a JSON object',
+    });
+  });
+
+  it('rejects a non-object manifest without throwing', () => {
+    for (const raw of ['"hello"', '[]', '42', 'true']) {
+      expect(() => loadManifest('/repo', read(raw))).not.toThrow();
+      expect(loadManifest('/repo', read(raw)).ok).toBe(false);
+    }
+  });
+
+  it('rejects a null surface definition', () => {
+    const r = loadManifest('/repo', read('{"surfaces":{"a/**":null}}'));
+    expect(r.ok).toBe(false);
+  });
+
+  // A non-numeric budget reaches the runner as NaN, which disables the
+  // timeout, which lets the Stop hook time out, which fails open.
+  it('rejects a non-numeric budget', () => {
+    const r = loadManifest('/repo', read('{"surfaces":{},"budgets":{"fast":"soon"}}'));
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/budget "fast"/);
+  });
+
+  it('rejects a zero or negative budget', () => {
+    expect(loadManifest('/repo', read('{"surfaces":{},"budgets":{"fast":0}}')).ok).toBe(false);
+    expect(loadManifest('/repo', read('{"surfaces":{},"budgets":{"fast":-5}}')).ok).toBe(false);
+  });
+
+  it('rejects a non-object budgets value', () => {
+    expect(loadManifest('/repo', read('{"surfaces":{},"budgets":[]}')).ok).toBe(false);
+  });
+
+  it('rejects unverified that is not an object', () => {
+    const r = loadManifest('/repo', read('{"surfaces":{},"unverified":"nope"}'));
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/unverified/);
+  });
+
+  it('rejects unverified entries that are not arrays of strings', () => {
+    expect(loadManifest('/repo', read('{"surfaces":{},"unverified":{"a/**":"x"}}')).ok).toBe(false);
+    expect(loadManifest('/repo', read('{"surfaces":{},"unverified":{"a/**":[1]}}')).ok).toBe(false);
+  });
+
+  it('rejects ignore entries that are not strings', () => {
+    const r = loadManifest('/repo', read('{"surfaces":{},"ignore":["ok",5]}'));
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/ignore/);
+  });
+
+  it('rejects a non-array ignore', () => {
+    expect(loadManifest('/repo', read('{"surfaces":{},"ignore":"docs/**"}')).ok).toBe(false);
+  });
+
+  it('accepts a fully populated valid manifest', () => {
+    const raw = JSON.stringify({
+      repo: 'OnDeck',
+      surfaces: { 'apps/api/**': { tier: 'fast', run: 'pnpm test' } },
+      always: 'pnpm typecheck',
+      unverified: { 'apps/mobile/**': ['expo-share-extension'] },
+      budgets: { fast: 90 },
+      ignore: ['**/*.md'],
+    });
+    const r = loadManifest('/repo', read(raw));
+    expect(r.ok).toBe(true);
+    expect(r.manifest.repo).toBe('OnDeck');
+    expect(r.manifest.budgets).toEqual({ fast: 90, browser: 360, full: 900 });
+    expect(r.manifest.ignore).toEqual(['**/*.md']);
+  });
 });
 ```
 
@@ -487,6 +563,11 @@ export const DEFAULT_BUDGETS = { fast: 120, browser: 360, full: 900 };
 
 const defaultRead = (p) => readFileSync(p, 'utf8');
 
+/** True for a non-null, non-array object. `typeof null === 'object'` is the trap. */
+function isPlainObject(v) {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
 export function manifestPath(repoRoot) {
   return path.join(repoRoot, '.claude', 'verify.json');
 }
@@ -507,12 +588,18 @@ export function loadManifest(repoRoot, read = defaultRead) {
     return { ok: false, reason: `could not parse verify.json: ${err.message}` };
   }
 
-  if (!parsed.surfaces || typeof parsed.surfaces !== 'object') {
+  // `null` is valid JSON and would sail past a truthiness check straight into a
+  // property read. This module must never throw: a throw here wedges the hook.
+  if (!isPlainObject(parsed)) {
+    return { ok: false, reason: 'verify.json must be a JSON object' };
+  }
+
+  if (!isPlainObject(parsed.surfaces)) {
     return { ok: false, reason: 'verify.json must have a "surfaces" object' };
   }
 
   for (const [glob, def] of Object.entries(parsed.surfaces)) {
-    if (!def || !TIERS.includes(def.tier)) {
+    if (!isPlainObject(def) || !TIERS.includes(def.tier)) {
       return { ok: false, reason: `surface "${glob}" has unknown tier "${def?.tier}"` };
     }
     if (def.tier !== 'skip' && typeof def.run !== 'string') {
@@ -520,15 +607,47 @@ export function loadManifest(repoRoot, read = defaultRead) {
     }
   }
 
+  // Budgets are safety-critical: they are the only thing keeping a run inside
+  // the Stop hook's own timeout, and a timed-out Stop hook FAILS OPEN. A
+  // non-numeric budget would reach the runner as NaN and disable the timeout
+  // entirely, so it is rejected rather than defaulted.
+  if (parsed.budgets !== undefined) {
+    if (!isPlainObject(parsed.budgets)) {
+      return { ok: false, reason: '"budgets" must be an object' };
+    }
+    for (const [tier, seconds] of Object.entries(parsed.budgets)) {
+      if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) {
+        return { ok: false, reason: `budget "${tier}" must be a positive number, got ${JSON.stringify(seconds)}` };
+      }
+    }
+  }
+
+  if (parsed.unverified !== undefined) {
+    if (!isPlainObject(parsed.unverified)) {
+      return { ok: false, reason: '"unverified" must be an object' };
+    }
+    for (const [glob, notes] of Object.entries(parsed.unverified)) {
+      if (!Array.isArray(notes) || notes.some((n) => typeof n !== 'string')) {
+        return { ok: false, reason: `"unverified" entry "${glob}" must be an array of strings` };
+      }
+    }
+  }
+
+  if (parsed.ignore !== undefined) {
+    if (!Array.isArray(parsed.ignore) || parsed.ignore.some((p) => typeof p !== 'string')) {
+      return { ok: false, reason: '"ignore" must be an array of strings' };
+    }
+  }
+
   return {
     ok: true,
     manifest: {
-      repo: parsed.repo ?? path.basename(repoRoot),
+      repo: typeof parsed.repo === 'string' ? parsed.repo : path.basename(repoRoot),
       surfaces: parsed.surfaces,
       always: typeof parsed.always === 'string' ? parsed.always : null,
       unverified: parsed.unverified ?? {},
       budgets: { ...DEFAULT_BUDGETS, ...(parsed.budgets ?? {}) },
-      ignore: Array.isArray(parsed.ignore) ? parsed.ignore : [],
+      ignore: parsed.ignore ?? [],
     },
   };
 }
@@ -537,7 +656,7 @@ export function loadManifest(repoRoot, read = defaultRead) {
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `pnpm test tests/manifest.test.mjs`
-Expected: PASS, 9 tests.
+Expected: PASS, all tests in the file green with no failures.
 
 - [ ] **Step 5: Commit**
 
