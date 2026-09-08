@@ -764,6 +764,30 @@ describe('route', () => {
   it('defers nothing when maxTier allows everything', () => {
     expect(route(manifest, ['packages/db/schema.sql']).deferred).toEqual([]);
   });
+
+  // Regression: picomatch's matcher is (input, returnObject). Passing it
+  // straight to `.some()` feeds the array index in as `returnObject`, and
+  // every index >= 1 returns a truthy object, so every glob appears to match.
+  // Single-file change sets hide it (index 0 is falsy); multi-file ones do not.
+  // These cases must therefore use two or more files.
+  it('does not match unrelated surfaces on a multi-file change set', () => {
+    const r = route(manifest, ['apps/api/a.ts', 'apps/api/b.ts', 'apps/api/c.ts']);
+    expect(r.tier).toBe('fast');
+    expect(r.runs).toEqual(['pnpm typecheck', 'pnpm test:api']);
+    expect(r.runs).not.toContain('pnpm verify:web');
+    expect(r.runs).not.toContain('pnpm db:verify');
+  });
+
+  it('does not emit disclosures for unrelated globs on a multi-file change set', () => {
+    const r = route(manifest, ['apps/api/a.ts', 'apps/api/b.ts']);
+    expect(r.disclosures).toEqual([]);
+  });
+
+  it('still skips correctly when several ignored files change together', () => {
+    const r = route(manifest, ['README.md', 'docs/a.md', 'docs/b.md']);
+    expect(r.tier).toBe('skip');
+    expect(r.runs).toEqual([]);
+  });
 });
 ```
 
@@ -781,6 +805,23 @@ import picomatch from 'picomatch';
 import { TIERS } from './manifest.mjs';
 
 const rank = (tier) => TIERS.indexOf(tier);
+
+/**
+ * True when any file matches the glob.
+ *
+ * The arrow wrapper is load-bearing, not style. picomatch's matcher has the
+ * signature (input, returnObject), so handing it straight to
+ * Array.prototype.some passes the array INDEX in as `returnObject`. For index
+ * 0 that is falsy and the matcher returns a boolean, but for every index >= 1
+ * it returns a truthy options object — so `files.some(isMatch)` reports a
+ * match for any glob whenever the array has two or more entries. The bug is
+ * invisible on a single-file change set and silently wrong on every real one.
+ * Route through this helper rather than calling picomatch inline.
+ */
+function matchesAny(files, glob) {
+  const isMatch = picomatch(glob);
+  return files.some((f) => isMatch(f));
+}
 
 /**
  * Decide what to run for a change set.
@@ -802,8 +843,7 @@ export function route(manifest, changedFiles, maxTier = 'full') {
 
   const matched = [];
   for (const [glob, def] of Object.entries(manifest.surfaces)) {
-    const isMatch = picomatch(glob);
-    if (considered.some(isMatch)) matched.push(def);
+    if (matchesAny(considered, glob)) matched.push(def);
   }
   if (matched.length === 0 && !manifest.always) return empty(considered);
 
@@ -824,8 +864,7 @@ export function route(manifest, changedFiles, maxTier = 'full') {
 
   const disclosures = [];
   for (const [glob, notes] of Object.entries(manifest.unverified)) {
-    const isMatch = picomatch(glob);
-    if (considered.some(isMatch)) disclosures.push(...notes);
+    if (matchesAny(considered, glob)) disclosures.push(...notes);
   }
 
   const highest = runnable.length
