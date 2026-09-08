@@ -1885,11 +1885,16 @@ async function collect<T>(gen: AsyncGenerator<T>): Promise<T[]> {
 }
 
 /**
- * `filterRecordsStream` takes an AsyncIterable, not an array. A plain array
- * would run fine — `for await` accepts sync iterables — but would fail
- * `tsc --noEmit`, which is the very command this repo's verify manifest runs
- * as its `always` floor. A type error here would break SnowPipe verification
- * on every single run.
+ * `filterRecordsStream` takes an AsyncIterable, not an array, so the fixture
+ * is wrapped rather than passed directly. A plain array would run fine, since
+ * `for await` accepts sync iterables, but it would misrepresent the call shape
+ * this test claims to cover.
+ *
+ * Nothing would catch that misrepresentation automatically: this repo's
+ * tsconfig excludes `tests`, so `tsc --noEmit` never compiles this file.
+ * Verified with `tsc --showConfig` — 489 files in the set, none under tests/.
+ * The wrapper is correct because it matches the real signature, not because a
+ * typechecker enforces it.
  */
 async function* stream(
   records: Record<string, unknown>[],
@@ -1947,10 +1952,18 @@ describe('#82: exportFilters shape contract', () => {
 Run: `pnpm vitest run tests/regression/export-filters-82.test.ts`
 Expected: PASS. #82 is already fixed (commit `5a6b84c`), so this test documents and locks the contract. **If it fails, stop and report** — that means the fix regressed, which is itself the finding.
 
-Then typecheck it, which vitest does not do:
+Then confirm the repo still typechecks:
 
 Run: `pnpm exec tsc --noEmit`
-Expected: no new errors from `tests/regression/export-filters-82.test.ts`. This matters more than it looks: the manifest written in Step 5 runs `pnpm exec tsc --noEmit` as its `always` floor, so a type error introduced here would fail SnowPipe verification on every future run. A runtime-green but type-red test would quietly break the thing this task exists to install.
+Expected: clean.
+
+**Do not read that clean result as covering your new test.** This repo's `tsconfig.json` carries `"exclude": ["node_modules", "tests", "backend-ion", "scripts"]`, so `tsc` never compiles anything under `tests/`. Confirm it for yourself rather than assuming either way:
+
+```bash
+pnpm exec tsc --showConfig | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const f=JSON.parse(s).files||[];console.log('compiled files:',f.length,'| under tests/:',f.filter(x=>x.includes('/tests/')).length)})"
+```
+
+Expected: a few hundred compiled files and **0** under `tests/`. The async-generator wrapper in the test is correct because it matches `filterRecordsStream`'s real signature, not because a typechecker enforces it — nothing enforces it, so the shape has to be right by construction.
 
 - [ ] **Step 4: Prove the test would have caught #82**
 
@@ -1999,6 +2012,7 @@ Expected: PASS again. Do not commit the temporary edit.
       "tests/unit/plugin-refresh-access-token.test.ts, which needs DATABASE_URL from Doppler and is excluded from the hook-invoked run; check it with: doppler run -- pnpm vitest run tests/unit/plugin-refresh-access-token.test.ts"
     ],
     "backend-ion/**": [
+      "type errors under backend-ion/src: the root tsconfig excludes backend-ion and it has no typecheck script of its own, so the `always` tsc floor does not compile any of it. Functional coverage comes from the unit tests only",
       "the deployed Lambda runtime, SST deploy only (see #83, the ERR_REQUIRE_ESM cold-start crash)",
       "live Google Merchant API behavior, covered only by the full tier",
       "tests/unit/plugin-refresh-access-token.test.ts, which needs DATABASE_URL from Doppler and is excluded from the hook-invoked run"
