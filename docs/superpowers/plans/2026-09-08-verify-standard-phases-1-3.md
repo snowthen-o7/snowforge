@@ -1,0 +1,1749 @@
+# Cross-Repo `verify` Standard — Phases 1–3 Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Build a tested verification dispatcher, prove it against the SnowPipe #82 regression, and register it as a blocking `Stop` hook so runtime proof becomes a precondition of finishing work.
+
+**Architecture:** A single Node ESM dispatcher reads a per-repo `.claude/verify.json` manifest, computes which files changed, routes those paths to verification tiers, runs the matched commands within per-tier time budgets, and returns a pass/fail/blocked verdict to the Claude Code `Stop` hook. All logic is centralized; repos contribute only facts.
+
+**Tech Stack:** Node 20+ ESM, vitest, picomatch, git CLI. No TypeScript build step — plain `.mjs` so the hook can invoke it with zero compilation.
+
+**Spec:** `C:\Users\alexi\Documents\Diaz\Repositories\SnowForgeLLC\SnowForge\docs\superpowers\specs\2026-09-08-verify-standard-design.md`
+
+## Global Constraints
+
+- **Package manager is pnpm.** Never npm or yarn.
+- **No AI co-author trailers in commit messages.** Alex is sole author.
+- **Dispatcher home is a new repo**, `C:\Users\alexi\Documents\Diaz\Repositories\SnowForgeLLC\snowforge-verify`, named `@snowforge/verify`, `"type": "module"`. This resolves a spec gap: §3 placed the dispatcher in untracked `~/.claude/scripts\`, but §11 requires tests written first, which an untracked directory cannot hold. The repo follows the existing `snowforge-notify` convention exactly: `src/`, `tests/`, `vitest.config.ts`, `tsconfig.json`, scripts `test` (`vitest run`), `test:watch`, `type-check`, `lint`.
+- **A broken dispatcher must never wedge a session.** Any unexpected throw exits 0.
+- **Infrastructure failure is never a pass.** Missing tooling yields `blocked`, which blocks.
+- **Tier order is `skip < fast < browser < full`.**
+- **Hook-invoked budgets total 480s**, under the `Stop` hook's 600s default timeout. `full` (900s) is never hook-invoked.
+- **Never verify in `C:\Users\alexi`**, which is an accidental git repo containing the entire home directory.
+- Windows host; all internal path matching uses repo-relative POSIX paths.
+
+---
+
+## Task 1: Repo scaffold and scope guard
+
+**Files:**
+- Create: `snowforge-verify/package.json`, `snowforge-verify/vitest.config.ts`, `snowforge-verify/tsconfig.json`, `snowforge-verify/.gitignore`, `snowforge-verify/README.md`
+- Create: `snowforge-verify/src/repo.mjs`
+- Test: `snowforge-verify/tests/repo.test.mjs`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: `findRepoRoot(cwd: string): string | null` — nearest ancestor containing `.git`, POSIX-normalized, or `null`. `isInScope(repoRoot: string): boolean` — true only for repos under the SnowForgeLLC directory, excluding the home directory itself.
+
+- [ ] **Step 1: Create the repo and scaffold files**
+
+```bash
+mkdir -p "C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC/snowforge-verify/src" \
+         "C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC/snowforge-verify/tests"
+cd "C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC/snowforge-verify"
+git init
+```
+
+`package.json`:
+
+```json
+{
+  "name": "@snowforge/verify",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "bin": { "snowforge-verify": "./src/cli.mjs" },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src/ tests/"
+  },
+  "dependencies": { "picomatch": "^4.0.2" },
+  "devDependencies": { "vitest": "^2.1.0", "typescript": "^5.6.0" }
+}
+```
+
+`vitest.config.ts`:
+
+```typescript
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: { environment: 'node', include: ['tests/**/*.test.mjs'] },
+});
+```
+
+`tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*", "tests/**/*"]
+}
+```
+
+`.gitignore`:
+
+```
+node_modules/
+```
+
+- [ ] **Step 2: Install dependencies**
+
+Run: `pnpm install`
+Expected: `picomatch`, `vitest`, `typescript` installed; `pnpm-lock.yaml` created.
+
+- [ ] **Step 3: Write the failing test**
+
+`tests/repo.test.mjs`:
+
+```javascript
+import { describe, it, expect } from 'vitest';
+import { findRepoRoot, isInScope } from '../src/repo.mjs';
+
+const SF = 'C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC';
+
+describe('isInScope', () => {
+  it('accepts a repo under SnowForgeLLC', () => {
+    expect(isInScope(`${SF}/SnowPipe`)).toBe(true);
+  });
+
+  it('rejects the home directory itself', () => {
+    expect(isInScope('C:/Users/alexi')).toBe(false);
+  });
+
+  it('rejects an unrelated repo', () => {
+    expect(isInScope('C:/Users/alexi/Documents/other/thing')).toBe(false);
+  });
+
+  it('rejects the SnowForgeLLC directory itself, which is not a repo', () => {
+    expect(isInScope(SF)).toBe(false);
+  });
+});
+
+describe('findRepoRoot', () => {
+  it('returns null when no .git ancestor exists', () => {
+    expect(findRepoRoot('C:/nonexistent/path/xyz')).toBe(null);
+  });
+
+  it('finds this repo from its own tests directory', () => {
+    const root = findRepoRoot(new URL('.', import.meta.url).pathname);
+    expect(root).not.toBe(null);
+    expect(root.endsWith('snowforge-verify')).toBe(true);
+  });
+});
+```
+
+- [ ] **Step 4: Run the test to verify it fails**
+
+Run: `pnpm test`
+Expected: FAIL — cannot resolve `../src/repo.mjs`.
+
+- [ ] **Step 5: Implement**
+
+`src/repo.mjs`:
+
+```javascript
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+
+const SNOWFORGE_ROOT =
+  'C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC';
+
+/** Normalize a Windows or POSIX path to forward slashes, no trailing slash. */
+export function toPosix(p) {
+  const s = String(p).replace(/\\/g, '/').replace(/\/+$/, '');
+  // Strip a leading slash that Node's URL.pathname adds to Windows drive paths.
+  return /^\/[A-Za-z]:/.test(s) ? s.slice(1) : s;
+}
+
+/** Nearest ancestor of `cwd` containing a .git entry, or null. */
+export function findRepoRoot(cwd) {
+  let dir = toPosix(path.resolve(cwd));
+  for (;;) {
+    if (existsSync(path.join(dir, '.git'))) return dir;
+    const parent = toPosix(path.dirname(dir));
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/**
+ * True only for repos that live directly under the SnowForgeLLC directory.
+ * Excludes the home directory, which is itself an accidental git repo
+ * containing everything, and excludes SnowForgeLLC itself.
+ */
+export function isInScope(repoRoot) {
+  if (!repoRoot) return false;
+  const root = toPosix(repoRoot);
+  if (root === toPosix(SNOWFORGE_ROOT)) return false;
+  return root.startsWith(`${toPosix(SNOWFORGE_ROOT)}/`);
+}
+
+export { SNOWFORGE_ROOT };
+```
+
+- [ ] **Step 6: Run the test to verify it passes**
+
+Run: `pnpm test`
+Expected: PASS, 6 tests.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add -A
+git commit -m "feat: scaffold @snowforge/verify with repo detection and scope guard"
+```
+
+---
+
+## Task 2: Change-set computation
+
+**Files:**
+- Create: `snowforge-verify/src/changes.mjs`
+- Test: `snowforge-verify/tests/changes.test.mjs`
+
+**Interfaces:**
+- Consumes: `toPosix` from `src/repo.mjs`.
+- Produces: `getChangedFiles(repoRoot: string, git = runGit): string[]` — repo-relative POSIX paths, deduped and sorted. Union of the working tree and commits since the merge-base with `origin/main`. `runGit(repoRoot: string, args: string[]): string` — thin `execFileSync` wrapper returning stdout, or `''` on non-zero exit.
+
+- [ ] **Step 1: Write the failing test**
+
+`tests/changes.test.mjs`:
+
+```javascript
+import { describe, it, expect } from 'vitest';
+import { getChangedFiles } from '../src/changes.mjs';
+
+/** Fake git: returns canned stdout per subcommand. */
+function fakeGit(responses) {
+  return (_root, args) => responses[args[0]] ?? '';
+}
+
+describe('getChangedFiles', () => {
+  it('unions working tree and committed changes, deduped and sorted', () => {
+    const git = fakeGit({
+      status: ' M src/b.ts\n?? src/a.ts\n',
+      'merge-base': 'abc123\n',
+      diff: 'src/b.ts\nsrc/c.ts\n',
+    });
+    expect(getChangedFiles('/repo', git)).toEqual([
+      'src/a.ts',
+      'src/b.ts',
+      'src/c.ts',
+    ]);
+  });
+
+  it('normalizes backslashes to forward slashes', () => {
+    const git = fakeGit({ status: ' M src\\win\\file.ts\n', 'merge-base': '', diff: '' });
+    expect(getChangedFiles('/repo', git)).toEqual(['src/win/file.ts']);
+  });
+
+  it('handles renames in porcelain output by taking the destination', () => {
+    const git = fakeGit({ status: 'R  old/x.ts -> new/x.ts\n', 'merge-base': '', diff: '' });
+    expect(getChangedFiles('/repo', git)).toEqual(['new/x.ts']);
+  });
+
+  it('returns only working-tree changes when there is no merge-base', () => {
+    const git = fakeGit({ status: ' M only.ts\n', 'merge-base': '', diff: 'ignored.ts\n' });
+    expect(getChangedFiles('/repo', git)).toEqual(['only.ts']);
+  });
+
+  it('returns an empty array when nothing changed', () => {
+    const git = fakeGit({ status: '', 'merge-base': 'abc\n', diff: '' });
+    expect(getChangedFiles('/repo', git)).toEqual([]);
+  });
+
+  it('strips quotes git adds around paths containing spaces', () => {
+    const git = fakeGit({ status: ' M "src/a b.ts"\n', 'merge-base': '', diff: '' });
+    expect(getChangedFiles('/repo', git)).toEqual(['src/a b.ts']);
+  });
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `pnpm test tests/changes.test.mjs`
+Expected: FAIL — cannot resolve `../src/changes.mjs`.
+
+- [ ] **Step 3: Implement**
+
+`src/changes.mjs`:
+
+```javascript
+import { execFileSync } from 'node:child_process';
+
+/** Run git in `repoRoot`, returning stdout or '' if the command fails. */
+export function runGit(repoRoot, args) {
+  try {
+    return execFileSync('git', args, {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      maxBuffer: 32 * 1024 * 1024,
+    });
+  } catch {
+    return '';
+  }
+}
+
+function clean(p) {
+  let s = p.trim().replace(/\\/g, '/');
+  if (s.startsWith('"') && s.endsWith('"')) s = s.slice(1, -1);
+  return s;
+}
+
+/** Parse `git status --porcelain`, taking rename destinations. */
+function parseStatus(stdout) {
+  return stdout
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const rest = line.slice(3);
+      const arrow = rest.indexOf(' -> ');
+      return clean(arrow === -1 ? rest : rest.slice(arrow + 4));
+    })
+    .filter(Boolean);
+}
+
+/**
+ * Repo-relative POSIX paths changed in this line of work: the working tree
+ * plus every commit since the merge-base with origin/main.
+ */
+export function getChangedFiles(repoRoot, git = runGit) {
+  const files = new Set(parseStatus(git(repoRoot, ['status', '--porcelain'])));
+
+  const base = git(repoRoot, ['merge-base', 'origin/main', 'HEAD']).trim();
+  if (base) {
+    const committed = git(repoRoot, ['diff', '--name-only', `${base}...HEAD`]);
+    for (const line of committed.split('\n')) {
+      const f = clean(line);
+      if (f) files.add(f);
+    }
+  }
+
+  return [...files].sort();
+}
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `pnpm test tests/changes.test.mjs`
+Expected: PASS, 6 tests.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add -A
+git commit -m "feat: compute change set from working tree and merge-base diff"
+```
+
+---
+
+## Task 3: Manifest loading and validation
+
+**Files:**
+- Create: `snowforge-verify/src/manifest.mjs`
+- Test: `snowforge-verify/tests/manifest.test.mjs`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: `DEFAULT_BUDGETS = { fast: 120, browser: 360, full: 900 }`. `loadManifest(repoRoot: string, readFile?): {ok: true, manifest} | {ok: false, reason: string}` — `reason` is `'missing'` when `.claude/verify.json` is absent, otherwise a validation message. A manifest with an empty `surfaces` object is valid and means an explicit opt-out.
+
+- [ ] **Step 1: Write the failing test**
+
+`tests/manifest.test.mjs`:
+
+```javascript
+import { describe, it, expect } from 'vitest';
+import { loadManifest, DEFAULT_BUDGETS } from '../src/manifest.mjs';
+
+const read = (content) => () => content;
+const missing = () => { const e = new Error('no'); e.code = 'ENOENT'; throw e; };
+
+describe('loadManifest', () => {
+  it('reports missing when the file does not exist', () => {
+    expect(loadManifest('/repo', missing)).toEqual({ ok: false, reason: 'missing' });
+  });
+
+  it('accepts an explicit opt-out', () => {
+    const r = loadManifest('/repo', read('{"surfaces":{}}'));
+    expect(r.ok).toBe(true);
+    expect(r.manifest.surfaces).toEqual({});
+  });
+
+  it('fills in default budgets', () => {
+    const r = loadManifest('/repo', read('{"surfaces":{}}'));
+    expect(r.manifest.budgets).toEqual(DEFAULT_BUDGETS);
+  });
+
+  it('keeps explicit budgets over defaults', () => {
+    const r = loadManifest('/repo', read('{"surfaces":{},"budgets":{"fast":30}}'));
+    expect(r.manifest.budgets.fast).toBe(30);
+    expect(r.manifest.budgets.browser).toBe(DEFAULT_BUDGETS.browser);
+  });
+
+  it('rejects malformed JSON with a readable reason', () => {
+    const r = loadManifest('/repo', read('{nope'));
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/parse/i);
+  });
+
+  it('rejects a missing surfaces key', () => {
+    const r = loadManifest('/repo', read('{}'));
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/surfaces/);
+  });
+
+  it('rejects an unknown tier', () => {
+    const r = loadManifest('/repo', read('{"surfaces":{"a/**":{"tier":"turbo","run":"x"}}}'));
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/turbo/);
+  });
+
+  it('rejects a surface with no run command', () => {
+    const r = loadManifest('/repo', read('{"surfaces":{"a/**":{"tier":"fast"}}}'));
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/run/);
+  });
+
+  it('defaults ignore and unverified to empty', () => {
+    const r = loadManifest('/repo', read('{"surfaces":{}}'));
+    expect(r.manifest.ignore).toEqual([]);
+    expect(r.manifest.unverified).toEqual({});
+  });
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `pnpm test tests/manifest.test.mjs`
+Expected: FAIL — cannot resolve `../src/manifest.mjs`.
+
+- [ ] **Step 3: Implement**
+
+`src/manifest.mjs`:
+
+```javascript
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
+export const TIERS = ['skip', 'fast', 'browser', 'full'];
+export const DEFAULT_BUDGETS = { fast: 120, browser: 360, full: 900 };
+
+const defaultRead = (p) => readFileSync(p, 'utf8');
+
+export function manifestPath(repoRoot) {
+  return path.join(repoRoot, '.claude', 'verify.json');
+}
+
+export function loadManifest(repoRoot, read = defaultRead) {
+  let raw;
+  try {
+    raw = read(manifestPath(repoRoot));
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return { ok: false, reason: 'missing' };
+    return { ok: false, reason: `could not read manifest: ${err.message}` };
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    return { ok: false, reason: `could not parse verify.json: ${err.message}` };
+  }
+
+  if (!parsed.surfaces || typeof parsed.surfaces !== 'object') {
+    return { ok: false, reason: 'verify.json must have a "surfaces" object' };
+  }
+
+  for (const [glob, def] of Object.entries(parsed.surfaces)) {
+    if (!def || !TIERS.includes(def.tier)) {
+      return { ok: false, reason: `surface "${glob}" has unknown tier "${def?.tier}"` };
+    }
+    if (def.tier !== 'skip' && typeof def.run !== 'string') {
+      return { ok: false, reason: `surface "${glob}" needs a "run" command` };
+    }
+  }
+
+  return {
+    ok: true,
+    manifest: {
+      repo: parsed.repo ?? path.basename(repoRoot),
+      surfaces: parsed.surfaces,
+      always: typeof parsed.always === 'string' ? parsed.always : null,
+      unverified: parsed.unverified ?? {},
+      budgets: { ...DEFAULT_BUDGETS, ...(parsed.budgets ?? {}) },
+      ignore: Array.isArray(parsed.ignore) ? parsed.ignore : [],
+    },
+  };
+}
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `pnpm test tests/manifest.test.mjs`
+Expected: PASS, 9 tests.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add -A
+git commit -m "feat: load and validate per-repo verify manifests"
+```
+
+---
+
+## Task 4: Tier routing
+
+**Files:**
+- Create: `snowforge-verify/src/route.mjs`
+- Test: `snowforge-verify/tests/route.test.mjs`
+
+**Interfaces:**
+- Consumes: `TIERS` from `src/manifest.mjs`.
+- Produces: `route(manifest, changedFiles, maxTier = 'full'): {tier: string, runs: string[], disclosures: string[], considered: string[], deferred: string[]}`. `runs` is deduped and ordered by ascending tier so cheap checks fail first. `disclosures` collects `unverified` entries whose glob matched a considered file. `tier` is `'skip'` when nothing matched. Surfaces above `maxTier` are excluded from `runs` and listed in `deferred` — this is how spec §5's "`full` is never hook-invoked" is enforced, since a 900s tier under a 540s hook timeout would fail open.
+
+- [ ] **Step 1: Write the failing test**
+
+`tests/route.test.mjs`:
+
+```javascript
+import { describe, it, expect } from 'vitest';
+import { route } from '../src/route.mjs';
+
+const manifest = {
+  surfaces: {
+    'apps/api/**': { tier: 'fast', run: 'pnpm test:api' },
+    'apps/mobile/**': { tier: 'browser', run: 'pnpm verify:web' },
+    'packages/db/**': { tier: 'full', run: 'pnpm db:verify' },
+  },
+  always: 'pnpm typecheck',
+  unverified: { 'apps/mobile/**': ['expo-share-extension', 'the EAS build'] },
+  ignore: ['**/*.md', 'docs/**'],
+  budgets: { fast: 120, browser: 360, full: 900 },
+};
+
+describe('route', () => {
+  it('skips when only ignored files changed', () => {
+    const r = route(manifest, ['README.md', 'docs/guide.md']);
+    expect(r.tier).toBe('skip');
+    expect(r.runs).toEqual([]);
+  });
+
+  it('runs always plus the matched fast surface', () => {
+    const r = route(manifest, ['apps/api/src/index.ts']);
+    expect(r.tier).toBe('fast');
+    expect(r.runs).toEqual(['pnpm typecheck', 'pnpm test:api']);
+  });
+
+  it('reports the highest matched tier and orders runs cheapest first', () => {
+    const r = route(manifest, ['apps/api/a.ts', 'apps/mobile/b.tsx']);
+    expect(r.tier).toBe('browser');
+    expect(r.runs).toEqual(['pnpm typecheck', 'pnpm test:api', 'pnpm verify:web']);
+  });
+
+  it('collects disclosures for matched unverified globs', () => {
+    const r = route(manifest, ['apps/mobile/b.tsx']);
+    expect(r.disclosures).toEqual(['expo-share-extension', 'the EAS build']);
+  });
+
+  it('omits disclosures when the glob did not match', () => {
+    const r = route(manifest, ['apps/api/a.ts']);
+    expect(r.disclosures).toEqual([]);
+  });
+
+  it('runs always alone when a changed file matches no surface', () => {
+    const r = route(manifest, ['scripts/tool.ts']);
+    expect(r.tier).toBe('fast');
+    expect(r.runs).toEqual(['pnpm typecheck']);
+  });
+
+  it('skips entirely for an explicit opt-out manifest', () => {
+    const r = route({ surfaces: {}, always: null, unverified: {}, ignore: [] }, ['a.ts']);
+    expect(r.tier).toBe('skip');
+    expect(r.runs).toEqual([]);
+  });
+
+  it('deduplicates a run shared by two matched surfaces', () => {
+    const m = {
+      surfaces: {
+        'a/**': { tier: 'fast', run: 'pnpm test' },
+        'b/**': { tier: 'fast', run: 'pnpm test' },
+      },
+      always: null, unverified: {}, ignore: [],
+    };
+    expect(route(m, ['a/x.ts', 'b/y.ts']).runs).toEqual(['pnpm test']);
+  });
+
+  it('excludes tiers above maxTier and reports them as deferred', () => {
+    const r = route(manifest, ['packages/db/schema.sql'], 'browser');
+    expect(r.runs).not.toContain('pnpm db:verify');
+    expect(r.deferred).toEqual(['pnpm db:verify']);
+  });
+
+  it('caps the reported tier at maxTier', () => {
+    const r = route(manifest, ['packages/db/schema.sql', 'apps/mobile/b.tsx'], 'browser');
+    expect(r.tier).toBe('browser');
+    expect(r.runs).toContain('pnpm verify:web');
+  });
+
+  it('defers nothing when maxTier allows everything', () => {
+    expect(route(manifest, ['packages/db/schema.sql']).deferred).toEqual([]);
+  });
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `pnpm test tests/route.test.mjs`
+Expected: FAIL — cannot resolve `../src/route.mjs`.
+
+- [ ] **Step 3: Implement**
+
+`src/route.mjs`:
+
+```javascript
+import picomatch from 'picomatch';
+import { TIERS } from './manifest.mjs';
+
+const rank = (tier) => TIERS.indexOf(tier);
+
+/**
+ * Decide what to run for a change set.
+ * Every matched surface contributes its run; the reported tier is the
+ * highest matched, ordered skip < fast < browser < full.
+ *
+ * `maxTier` caps what may run in this context. The Stop hook passes
+ * 'browser', because the 900s `full` tier cannot complete inside the hook's
+ * timeout and a timed-out Stop hook fails open (spec §5).
+ */
+export function route(manifest, changedFiles, maxTier = 'full') {
+  const empty = (considered) => ({
+    tier: 'skip', runs: [], disclosures: [], considered, deferred: [],
+  });
+
+  const ignored = manifest.ignore.length ? picomatch(manifest.ignore) : () => false;
+  const considered = changedFiles.filter((f) => !ignored(f));
+  if (considered.length === 0) return empty(considered);
+
+  const matched = [];
+  for (const [glob, def] of Object.entries(manifest.surfaces)) {
+    const isMatch = picomatch(glob);
+    if (considered.some(isMatch)) matched.push(def);
+  }
+  if (matched.length === 0 && !manifest.always) return empty(considered);
+
+  matched.sort((a, b) => rank(a.tier) - rank(b.tier));
+
+  const cap = rank(maxTier);
+  const runnable = matched.filter((d) => rank(d.tier) <= cap);
+  const deferred = [];
+  for (const def of matched) {
+    if (rank(def.tier) > cap && !deferred.includes(def.run)) deferred.push(def.run);
+  }
+
+  const runs = [];
+  if (manifest.always) runs.push(manifest.always);
+  for (const def of runnable) {
+    if (def.tier !== 'skip' && !runs.includes(def.run)) runs.push(def.run);
+  }
+
+  const disclosures = [];
+  for (const [glob, notes] of Object.entries(manifest.unverified)) {
+    const isMatch = picomatch(glob);
+    if (considered.some(isMatch)) disclosures.push(...notes);
+  }
+
+  const highest = runnable.length
+    ? runnable[runnable.length - 1].tier
+    : 'fast'; // `always` alone is a fast-tier floor
+
+  return { tier: highest, runs, disclosures, considered, deferred };
+}
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `pnpm test tests/route.test.mjs`
+Expected: PASS, 8 tests.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add -A
+git commit -m "feat: route changed paths to verification tiers"
+```
+
+---
+
+## Task 5: State key and verdict cache
+
+**Files:**
+- Create: `snowforge-verify/src/state.mjs`
+- Test: `snowforge-verify/tests/state.test.mjs`
+
+**Interfaces:**
+- Consumes: `runGit` from `src/changes.mjs`.
+- Produces: `stateKey(repoRoot, git?): string` — sha1 of `HEAD` plus the full working-tree diff. `readVerdict(sessionId, key, io?): string | null`. `writeVerdict(sessionId, key, verdict, io?): void`. Cache lives at `C:\Users\alexi\.claude\verify-cache\{session_id}.json`.
+
+This is the loop protection required by spec §3: the `Stop` hook input carries no `stop_hook_active` field, so the dispatcher must decide for itself whether it has already judged this exact code state.
+
+- [ ] **Step 1: Write the failing test**
+
+`tests/state.test.mjs`:
+
+```javascript
+import { describe, it, expect } from 'vitest';
+import { stateKey, readVerdict, writeVerdict } from '../src/state.mjs';
+
+const gitWith = (head, diff) => (_root, args) =>
+  args[0] === 'rev-parse' ? head : diff;
+
+/** In-memory stand-in for the cache file. */
+function memIO() {
+  const files = new Map();
+  return {
+    files,
+    read: (p) => {
+      if (!files.has(p)) { const e = new Error('no'); e.code = 'ENOENT'; throw e; }
+      return files.get(p);
+    },
+    write: (p, c) => files.set(p, c),
+    mkdir: () => {},
+  };
+}
+
+describe('stateKey', () => {
+  it('is stable for an identical tree', () => {
+    const git = gitWith('abc123\n', 'diff body');
+    expect(stateKey('/repo', git)).toBe(stateKey('/repo', git));
+  });
+
+  it('changes when the working tree changes', () => {
+    const a = stateKey('/repo', gitWith('abc123\n', 'one'));
+    const b = stateKey('/repo', gitWith('abc123\n', 'two'));
+    expect(a).not.toBe(b);
+  });
+
+  it('changes when HEAD moves even with an identical diff', () => {
+    const a = stateKey('/repo', gitWith('abc123\n', 'same'));
+    const b = stateKey('/repo', gitWith('def456\n', 'same'));
+    expect(a).not.toBe(b);
+  });
+});
+
+describe('verdict cache', () => {
+  it('returns null for an unseen key', () => {
+    expect(readVerdict('s1', 'k1', memIO())).toBe(null);
+  });
+
+  it('round-trips a verdict', () => {
+    const io = memIO();
+    writeVerdict('s1', 'k1', 'fail', io);
+    expect(readVerdict('s1', 'k1', io)).toBe('fail');
+  });
+
+  it('keeps verdicts for different keys apart', () => {
+    const io = memIO();
+    writeVerdict('s1', 'k1', 'fail', io);
+    writeVerdict('s1', 'k2', 'pass', io);
+    expect(readVerdict('s1', 'k1', io)).toBe('fail');
+    expect(readVerdict('s1', 'k2', io)).toBe('pass');
+  });
+
+  it('keeps sessions apart', () => {
+    const io = memIO();
+    writeVerdict('s1', 'k1', 'fail', io);
+    expect(readVerdict('s2', 'k1', io)).toBe(null);
+  });
+
+  it('treats a corrupt cache file as empty rather than throwing', () => {
+    const io = memIO();
+    writeVerdict('s1', 'k1', 'pass', io);
+    for (const p of io.files.keys()) io.files.set(p, '{corrupt');
+    expect(readVerdict('s1', 'k1', io)).toBe(null);
+  });
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `pnpm test tests/state.test.mjs`
+Expected: FAIL — cannot resolve `../src/state.mjs`.
+
+- [ ] **Step 3: Implement**
+
+`src/state.mjs`:
+
+```javascript
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import path from 'node:path';
+import { runGit } from './changes.mjs';
+
+const CACHE_DIR = 'C:/Users/alexi/.claude/verify-cache';
+
+const defaultIO = {
+  read: (p) => readFileSync(p, 'utf8'),
+  write: (p, c) => writeFileSync(p, c, 'utf8'),
+  mkdir: (d) => mkdirSync(d, { recursive: true }),
+};
+
+/** Identity of the exact code state: HEAD plus the full working-tree diff. */
+export function stateKey(repoRoot, git = runGit) {
+  const head = git(repoRoot, ['rev-parse', 'HEAD']).trim();
+  const diff = git(repoRoot, ['diff', 'HEAD']);
+  return createHash('sha1').update(`${head}\n${diff}`).digest('hex');
+}
+
+function cachePath(sessionId) {
+  return path.join(CACHE_DIR, `${sessionId}.json`);
+}
+
+function readAll(sessionId, io) {
+  try {
+    return JSON.parse(io.read(cachePath(sessionId)));
+  } catch {
+    return {};
+  }
+}
+
+export function readVerdict(sessionId, key, io = defaultIO) {
+  return readAll(sessionId, io)[key] ?? null;
+}
+
+export function writeVerdict(sessionId, key, verdict, io = defaultIO) {
+  const all = readAll(sessionId, io);
+  all[key] = verdict;
+  io.mkdir(CACHE_DIR);
+  io.write(cachePath(sessionId), JSON.stringify(all, null, 2));
+}
+
+export { CACHE_DIR };
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `pnpm test tests/state.test.mjs`
+Expected: PASS, 8 tests.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add -A
+git commit -m "feat: state-keyed verdict cache for stop-hook loop protection"
+```
+
+---
+
+## Task 6: Command runner with budgets
+
+**Files:**
+- Create: `snowforge-verify/src/run.mjs`
+- Test: `snowforge-verify/tests/run.test.mjs`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: `runAll(repoRoot, runs, budgetSeconds, exec?): {verdict: 'pass'|'fail'|'blocked', failed: string|null, output: string, seconds: number}`. Stops at the first non-zero exit. Exit code 124 or a timeout signal maps to `blocked`, never `fail`, because a budget overrun is an inability to verify rather than proof of a defect.
+
+- [ ] **Step 1: Write the failing test**
+
+`tests/run.test.mjs`:
+
+```javascript
+import { describe, it, expect } from 'vitest';
+import { runAll } from '../src/run.mjs';
+
+/** Fake exec: maps a command string to {status, stdout, signal}. */
+const execWith = (table) => (cmd) =>
+  table[cmd] ?? { status: 0, stdout: 'ok', signal: null };
+
+describe('runAll', () => {
+  it('passes when every command exits zero', () => {
+    const r = runAll('/repo', ['a', 'b'], 120, execWith({}));
+    expect(r.verdict).toBe('pass');
+    expect(r.failed).toBe(null);
+  });
+
+  it('passes trivially with no commands', () => {
+    expect(runAll('/repo', [], 120, execWith({})).verdict).toBe('pass');
+  });
+
+  it('fails on a non-zero exit and names the command', () => {
+    const r = runAll('/repo', ['a', 'b'], 120, execWith({ b: { status: 1, stdout: 'boom', signal: null } }));
+    expect(r.verdict).toBe('fail');
+    expect(r.failed).toBe('b');
+    expect(r.output).toContain('boom');
+  });
+
+  it('stops at the first failure', () => {
+    const seen = [];
+    const exec = (cmd) => {
+      seen.push(cmd);
+      return cmd === 'a' ? { status: 1, stdout: 'x', signal: null } : { status: 0, stdout: '', signal: null };
+    };
+    runAll('/repo', ['a', 'b', 'c'], 120, exec);
+    expect(seen).toEqual(['a']);
+  });
+
+  it('maps a timeout signal to blocked, not fail', () => {
+    const r = runAll('/repo', ['slow'], 1, execWith({ slow: { status: null, stdout: '', signal: 'SIGTERM' } }));
+    expect(r.verdict).toBe('blocked');
+    expect(r.output).toMatch(/budget/i);
+  });
+
+  it('maps exit code 124 to blocked', () => {
+    const r = runAll('/repo', ['slow'], 1, execWith({ slow: { status: 124, stdout: '', signal: null } }));
+    expect(r.verdict).toBe('blocked');
+  });
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `pnpm test tests/run.test.mjs`
+Expected: FAIL — cannot resolve `../src/run.mjs`.
+
+- [ ] **Step 3: Implement**
+
+`src/run.mjs`:
+
+```javascript
+import { spawnSync } from 'node:child_process';
+
+const defaultExec = (cmd, repoRoot, timeoutMs) => {
+  const r = spawnSync(cmd, {
+    cwd: repoRoot,
+    shell: true,
+    encoding: 'utf8',
+    timeout: timeoutMs,
+    maxBuffer: 32 * 1024 * 1024,
+  });
+  return {
+    status: r.status,
+    signal: r.signal,
+    stdout: `${r.stdout ?? ''}${r.stderr ?? ''}`,
+  };
+};
+
+/** Run commands in order, stopping at the first failure. */
+export function runAll(repoRoot, runs, budgetSeconds, exec = defaultExec) {
+  const started = Date.now();
+  const budgetMs = budgetSeconds * 1000;
+
+  for (const cmd of runs) {
+    const remaining = budgetMs - (Date.now() - started);
+    const res = exec(cmd, repoRoot, Math.max(remaining, 1));
+    const timedOut = res.signal != null || res.status === 124;
+
+    if (timedOut) {
+      return {
+        verdict: 'blocked',
+        failed: cmd,
+        output: `"${cmd}" exceeded the ${budgetSeconds}s budget for this tier.`,
+        seconds: Math.round((Date.now() - started) / 1000),
+      };
+    }
+    if (res.status !== 0) {
+      return {
+        verdict: 'fail',
+        failed: cmd,
+        output: res.stdout,
+        seconds: Math.round((Date.now() - started) / 1000),
+      };
+    }
+  }
+
+  return {
+    verdict: 'pass',
+    failed: null,
+    output: '',
+    seconds: Math.round((Date.now() - started) / 1000),
+  };
+}
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `pnpm test tests/run.test.mjs`
+Expected: PASS, 6 tests.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add -A
+git commit -m "feat: budgeted command runner mapping timeouts to blocked"
+```
+
+---
+
+## Task 7: Verdict-to-hook protocol and report formatting
+
+**Files:**
+- Create: `snowforge-verify/src/report.mjs`
+- Test: `snowforge-verify/tests/report.test.mjs`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: `formatPass(repo, tier, seconds, disclosures): string`. `formatFailure(repo, tier, failedCmd, output): string`. `decide(verdict, mode): {exitCode: 0|2, blocking: boolean}` — in `report` mode nothing ever blocks; in `block` mode `fail` and `blocked` return exit code 2.
+
+Per the hooks contract, exit code 2 blocks the stop and the blocking reason is read from stderr. Output on stdout is not shown, so all human-facing text goes to stderr when blocking.
+
+- [ ] **Step 1: Write the failing test**
+
+`tests/report.test.mjs`:
+
+```javascript
+import { describe, it, expect } from 'vitest';
+import { formatPass, formatFailure, decide } from '../src/report.mjs';
+
+describe('decide', () => {
+  it('blocks on fail in block mode', () => {
+    expect(decide('fail', 'block')).toEqual({ exitCode: 2, blocking: true });
+  });
+
+  it('blocks on blocked in block mode', () => {
+    expect(decide('blocked', 'block')).toEqual({ exitCode: 2, blocking: true });
+  });
+
+  it('does not block on pass', () => {
+    expect(decide('pass', 'block')).toEqual({ exitCode: 0, blocking: false });
+  });
+
+  it('never blocks in report mode', () => {
+    expect(decide('fail', 'report')).toEqual({ exitCode: 0, blocking: false });
+    expect(decide('blocked', 'report')).toEqual({ exitCode: 0, blocking: false });
+  });
+});
+
+describe('formatPass', () => {
+  it('states repo, tier, and duration', () => {
+    expect(formatPass('SnowPipe', 'fast', 12, [])).toContain('VERIFY PASS  SnowPipe  fast (12s)');
+  });
+
+  it('omits the disclosure block when there is nothing undisclosed', () => {
+    expect(formatPass('SnowPipe', 'fast', 12, [])).not.toContain('NOT covered');
+  });
+
+  it('lists every disclosure when the run set touched a proxy surface', () => {
+    const out = formatPass('OnDeck', 'browser', 38, ['expo-share-extension', 'the EAS build']);
+    expect(out).toContain('NOT covered by this run:');
+    expect(out).toContain('- expo-share-extension');
+    expect(out).toContain('- the EAS build');
+  });
+});
+
+describe('formatFailure', () => {
+  it('names the failing command and includes its output', () => {
+    const out = formatFailure('SnowPipe', 'browser', 'pnpm test:e2e', 'AssertionError: 47 !== 50');
+    expect(out).toContain('pnpm test:e2e');
+    expect(out).toContain('AssertionError: 47 !== 50');
+  });
+
+  it('truncates very long output but says that it did', () => {
+    const out = formatFailure('SnowPipe', 'fast', 'x', 'y'.repeat(20000));
+    expect(out.length).toBeLessThan(9000);
+    expect(out).toMatch(/truncated/i);
+  });
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `pnpm test tests/report.test.mjs`
+Expected: FAIL — cannot resolve `../src/report.mjs`.
+
+- [ ] **Step 3: Implement**
+
+`src/report.mjs`:
+
+```javascript
+const MAX_OUTPUT = 8000;
+
+export function decide(verdict, mode) {
+  if (mode === 'report') return { exitCode: 0, blocking: false };
+  if (verdict === 'fail' || verdict === 'blocked') {
+    return { exitCode: 2, blocking: true };
+  }
+  return { exitCode: 0, blocking: false };
+}
+
+export function formatPass(repo, tier, seconds, disclosures) {
+  const lines = [`VERIFY PASS  ${repo}  ${tier} (${seconds}s)`];
+  if (disclosures.length) {
+    lines.push('  NOT covered by this run:');
+    for (const d of disclosures) lines.push(`    - ${d}`);
+  }
+  return lines.join('\n');
+}
+
+export function formatFailure(repo, tier, failedCmd, output) {
+  let body = output ?? '';
+  if (body.length > MAX_OUTPUT) {
+    body = `${body.slice(0, MAX_OUTPUT)}\n... (truncated)`;
+  }
+  return [
+    `VERIFY FAILED  ${repo}  ${tier}`,
+    `  command: ${failedCmd}`,
+    '',
+    body,
+    '',
+    'This change is not verified. Fix the failure and try again.',
+    'Do not claim the work is complete until this passes.',
+  ].join('\n');
+}
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `pnpm test tests/report.test.mjs`
+Expected: PASS, 9 tests.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add -A
+git commit -m "feat: hook verdict protocol and report formatting"
+```
+
+---
+
+## Task 8: CLI entrypoint — phase 1 complete
+
+**Files:**
+- Create: `snowforge-verify/src/cli.mjs`
+- Test: `snowforge-verify/tests/cli.test.mjs`
+
+**Interfaces:**
+- Consumes: every module above.
+- Produces: `main(hookInput, deps): {exitCode: number, stderr: string, stdout: string}` — pure and fully injectable, so the whole decision path is testable without touching git, the filesystem, or a shell. `src/cli.mjs` run directly reads the hook JSON from stdin and exits with `exitCode`.
+
+- [ ] **Step 1: Write the failing test**
+
+`tests/cli.test.mjs`:
+
+```javascript
+import { describe, it, expect } from 'vitest';
+import { main } from '../src/cli.mjs';
+
+const SF = 'C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC';
+
+function deps(over = {}) {
+  return {
+    findRepoRoot: () => `${SF}/SnowPipe`,
+    isInScope: () => true,
+    getChangedFiles: () => ['src/a.ts'],
+    loadManifest: () => ({
+      ok: true,
+      manifest: {
+        repo: 'SnowPipe',
+        surfaces: { 'src/**': { tier: 'fast', run: 'pnpm test' } },
+        always: null, unverified: {}, ignore: ['**/*.md'],
+        budgets: { fast: 120, browser: 360, full: 900 },
+      },
+    }),
+    stateKey: () => 'key1',
+    readVerdict: () => null,
+    writeVerdict: () => {},
+    runAll: () => ({ verdict: 'pass', failed: null, output: '', seconds: 3 }),
+    mode: 'block',
+    ...over,
+  };
+}
+
+const input = { session_id: 's1', cwd: `${SF}/SnowPipe` };
+
+describe('main', () => {
+  it('no-ops outside a git repo', () => {
+    const r = main(input, deps({ findRepoRoot: () => null }));
+    expect(r.exitCode).toBe(0);
+  });
+
+  it('no-ops for a repo outside SnowForge', () => {
+    const r = main(input, deps({ isInScope: () => false }));
+    expect(r.exitCode).toBe(0);
+  });
+
+  it('no-ops when nothing changed', () => {
+    const r = main(input, deps({ getChangedFiles: () => [] }));
+    expect(r.exitCode).toBe(0);
+  });
+
+  it('no-ops when only ignored files changed', () => {
+    const r = main(input, deps({ getChangedFiles: () => ['README.md'] }));
+    expect(r.exitCode).toBe(0);
+  });
+
+  it('blocks and names /verify-init when the manifest is missing', () => {
+    const r = main(input, deps({ loadManifest: () => ({ ok: false, reason: 'missing' }) }));
+    expect(r.exitCode).toBe(2);
+    expect(r.stderr).toContain('/verify-init');
+  });
+
+  it('blocks with the validation reason when the manifest is invalid', () => {
+    const r = main(input, deps({ loadManifest: () => ({ ok: false, reason: 'bad tier "turbo"' }) }));
+    expect(r.exitCode).toBe(2);
+    expect(r.stderr).toContain('turbo');
+  });
+
+  it('passes and prints the report', () => {
+    const r = main(input, deps());
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain('VERIFY PASS');
+  });
+
+  it('blocks on a failing verification', () => {
+    const r = main(input, deps({
+      runAll: () => ({ verdict: 'fail', failed: 'pnpm test', output: 'boom', seconds: 4 }),
+    }));
+    expect(r.exitCode).toBe(2);
+    expect(r.stderr).toContain('boom');
+  });
+
+  it('does not block twice for the same state key', () => {
+    const r = main(input, deps({ readVerdict: () => 'fail' }));
+    expect(r.exitCode).toBe(0);
+  });
+
+  it('never blocks in report mode', () => {
+    const r = main(input, deps({
+      mode: 'report',
+      runAll: () => ({ verdict: 'fail', failed: 'pnpm test', output: 'boom', seconds: 4 }),
+    }));
+    expect(r.exitCode).toBe(0);
+  });
+
+  it('exits 0 when a dependency throws, rather than wedging the session', () => {
+    const r = main(input, deps({ getChangedFiles: () => { throw new Error('git exploded'); } }));
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toMatch(/verify.*error/i);
+  });
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `pnpm test tests/cli.test.mjs`
+Expected: FAIL — cannot resolve `../src/cli.mjs`.
+
+- [ ] **Step 3: Implement**
+
+`src/cli.mjs`:
+
+```javascript
+#!/usr/bin/env node
+import { findRepoRoot, isInScope } from './repo.mjs';
+import { getChangedFiles } from './changes.mjs';
+import { loadManifest } from './manifest.mjs';
+import { route } from './route.mjs';
+import { stateKey, readVerdict, writeVerdict } from './state.mjs';
+import { runAll } from './run.mjs';
+import { decide, formatPass, formatFailure } from './report.mjs';
+
+const NO_OP = { exitCode: 0, stderr: '', stdout: '' };
+
+export function main(hookInput, deps) {
+  const d = {
+    findRepoRoot, isInScope, getChangedFiles, loadManifest,
+    stateKey, readVerdict, writeVerdict, runAll,
+    mode: process.env.SNOWFORGE_VERIFY_MODE ?? 'block',
+    maxTier: 'browser',
+    ...deps,
+  };
+
+  try {
+    const repoRoot = d.findRepoRoot(hookInput.cwd);
+    if (!repoRoot || !d.isInScope(repoRoot)) return NO_OP;
+
+    const changed = d.getChangedFiles(repoRoot);
+    if (changed.length === 0) return NO_OP;
+
+    const loaded = d.loadManifest(repoRoot);
+    if (!loaded.ok) {
+      const reason =
+        loaded.reason === 'missing'
+          ? [
+              `This repo has no verify manifest (${repoRoot}/.claude/verify.json).`,
+              'Run /verify-init to create one, or add {"surfaces":{}} to opt out explicitly.',
+            ].join('\n')
+          : `Invalid verify.json: ${loaded.reason}`;
+      const { exitCode } = decide('blocked', d.mode);
+      return { exitCode, stderr: exitCode === 2 ? reason : '', stdout: reason };
+    }
+
+    const manifest = loaded.manifest;
+    // The hook may never invoke the `full` tier: its 900s budget exceeds the
+    // hook timeout, and a timed-out Stop hook fails open (spec §5).
+    const plan = route(manifest, changed, d.maxTier);
+    if (plan.tier === 'skip' || plan.runs.length === 0) return NO_OP;
+
+    const key = d.stateKey(repoRoot);
+    if (d.readVerdict(hookInput.session_id, key) !== null) return NO_OP;
+
+    const budget = manifest.budgets[plan.tier] ?? manifest.budgets.fast;
+    const result = d.runAll(repoRoot, plan.runs, budget);
+    d.writeVerdict(hookInput.session_id, key, result.verdict);
+
+    if (result.verdict === 'pass') {
+      let stdout = formatPass(manifest.repo, plan.tier, result.seconds, plan.disclosures);
+      if (plan.deferred.length) {
+        stdout += `\n  deferred to the full tier (run by hand): ${plan.deferred.join(', ')}`;
+      }
+      return { exitCode: 0, stderr: '', stdout };
+    }
+
+    const text = formatFailure(manifest.repo, plan.tier, result.failed, result.output);
+    const { exitCode } = decide(result.verdict, d.mode);
+    return { exitCode, stderr: exitCode === 2 ? text : '', stdout: text };
+  } catch (err) {
+    // A broken dispatcher must never wedge every session in every repo.
+    return { exitCode: 0, stderr: '', stdout: `verify: internal error, skipped (${err.message})` };
+  }
+}
+
+// Entrypoint: read the hook JSON from stdin, act, exit.
+if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}`) {
+  let raw = '';
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', (c) => { raw += c; });
+  process.stdin.on('end', () => {
+    let input = {};
+    try { input = JSON.parse(raw); } catch { /* fall through with defaults */ }
+    input.cwd ??= process.cwd();
+    input.session_id ??= 'manual';
+    // `--full` lifts the hook's tier cap for deliberate manual runs.
+    const overrides = process.argv.includes('--full') ? { maxTier: 'full' } : {};
+    const r = main(input, overrides);
+    if (r.stdout) process.stdout.write(`${r.stdout}\n`);
+    if (r.stderr) process.stderr.write(`${r.stderr}\n`);
+    process.exit(r.exitCode);
+  });
+}
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `pnpm test`
+Expected: PASS, all eight suites green with no failures.
+
+- [ ] **Step 5: Smoke-test manually against a real repo, with no hook registered**
+
+```bash
+cd "C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC/snowforge-verify"
+echo '{"session_id":"manual","cwd":"C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC/SnowPipe"}' | node src/cli.mjs; echo "exit=$?"
+```
+
+Expected: the missing-manifest block, `exit=2`, mentioning `/verify-init`. SnowPipe has no manifest yet, which is exactly the fail-loud path from spec §8.
+
+- [ ] **Step 6: Verify the home-directory guard**
+
+```bash
+echo '{"session_id":"manual","cwd":"C:/Users/alexi"}' | node src/cli.mjs; echo "exit=$?"
+```
+
+Expected: no output, `exit=0`. The accidental home-directory repo must never trigger verification.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add -A
+git commit -m "feat: dispatcher CLI entrypoint with injectable dependencies"
+```
+
+---
+
+## Task 9: SnowPipe manifest and the #82 regression test
+
+**Files:**
+- Create: `SnowPipe/.claude/verify.json`
+- Create: `SnowPipe/tests/regression/export-filters-82.test.ts`
+
+**Interfaces:**
+- Consumes: `normalizeExportFilters` and `filterRecordsStream` from `SnowPipe/src/server/streaming/filter-stream.ts` (defined at lines 293 and 321).
+- Produces: a manifest that routes `src/server/streaming/**` and `src/server/core/**` to the fast tier, and the UI and export surfaces to the browser tier.
+
+**Context for the implementer:** #82 was not a UI bug and not an engine bug. It was a *contract* bug between them: the settings UI persisted `exportFilters` as a bare array `[...]`, while the engine expected `{conditions: [...]}`, so filters were silently ignored on every code path. Typecheck passed because the field was typed loosely. The regression test therefore asserts the contract in both shapes at the `fast` tier — which is both cheaper and a more faithful reproduction than driving it through a browser.
+
+- [ ] **Step 1: Read the current implementation before writing the test**
+
+```bash
+cd "C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC/SnowPipe"
+sed -n '285,340p' src/server/streaming/filter-stream.ts
+```
+
+Expected: the signature `normalizeExportFilters(input: unknown): FilterConfig | null` and the async generator `filterRecordsStream`. Confirm the exact `FilterConfig` shape and condition field names before writing assertions against them.
+
+- [ ] **Step 2: Write the failing regression test**
+
+`SnowPipe/tests/regression/export-filters-82.test.ts`:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import {
+  normalizeExportFilters,
+  filterRecordsStream,
+} from '@/server/streaming/filter-stream';
+
+/** Collect an async generator into an array. */
+async function collect<T>(gen: AsyncGenerator<T>): Promise<T[]> {
+  const out: T[] = [];
+  for await (const item of gen) out.push(item);
+  return out;
+}
+
+const RECORDS = [
+  { id: '1', tags: 'snowpipe-test', title: 'Lodge Skillet' },
+  { id: '2', tags: 'other', title: 'Vitamix Blender' },
+  { id: '3', tags: 'snowpipe-test', title: 'OXO Peeler' },
+];
+
+const CONDITION = { field: 'tags', operator: 'contains', value: 'snowpipe-test' };
+
+describe('#82: exportFilters shape contract', () => {
+  it('normalizes the bare-array shape the settings UI persists', () => {
+    const config = normalizeExportFilters([CONDITION]);
+    expect(config).not.toBeNull();
+    expect(config!.conditions).toHaveLength(1);
+  });
+
+  it('normalizes the wrapped shape the engine expects', () => {
+    const config = normalizeExportFilters({ conditions: [CONDITION] });
+    expect(config).not.toBeNull();
+    expect(config!.conditions).toHaveLength(1);
+  });
+
+  it('returns null for empty and absent filters so callers skip filtering', () => {
+    expect(normalizeExportFilters(null)).toBeNull();
+    expect(normalizeExportFilters([])).toBeNull();
+    expect(normalizeExportFilters({ conditions: [] })).toBeNull();
+  });
+
+  it('actually drops non-matching records for the bare-array shape', async () => {
+    const config = normalizeExportFilters([CONDITION])!;
+    const kept = await collect(filterRecordsStream(RECORDS, config));
+    expect(kept.map((r) => r.id)).toEqual(['1', '3']);
+  });
+
+  it('produces identical results for both persisted shapes', async () => {
+    const fromArray = await collect(
+      filterRecordsStream(RECORDS, normalizeExportFilters([CONDITION])!),
+    );
+    const fromWrapped = await collect(
+      filterRecordsStream(RECORDS, normalizeExportFilters({ conditions: [CONDITION] })!),
+    );
+    expect(fromArray).toEqual(fromWrapped);
+  });
+});
+```
+
+- [ ] **Step 3: Run the test**
+
+Run: `pnpm vitest run tests/regression/export-filters-82.test.ts`
+Expected: PASS. #82 is already fixed (commit `5a6b84c`), so this test documents and locks the contract. **If it fails, stop and report** — that means the fix regressed, which is itself the finding.
+
+- [ ] **Step 4: Prove the test would have caught #82**
+
+Temporarily make `normalizeExportFilters` reject the bare-array shape:
+
+```bash
+cd "C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC/SnowPipe"
+git stash list  # note current state before experimenting
+```
+
+Edit `src/server/streaming/filter-stream.ts` so the early branch handling `Array.isArray(input)` returns `null`, then:
+
+Run: `pnpm vitest run tests/regression/export-filters-82.test.ts`
+Expected: FAIL on "normalizes the bare-array shape" and "actually drops non-matching records" — the #82 symptom exactly.
+
+Then revert the experiment:
+
+```bash
+git checkout -- src/server/streaming/filter-stream.ts
+pnpm vitest run tests/regression/export-filters-82.test.ts
+```
+
+Expected: PASS again. Do not commit the temporary edit.
+
+- [ ] **Step 5: Write the manifest**
+
+`SnowPipe/.claude/verify.json`:
+
+```json
+{
+  "repo": "SnowPipe",
+  "surfaces": {
+    "src/server/streaming/**": { "tier": "fast", "run": "pnpm vitest run tests/regression tests/unit" },
+    "src/server/core/**": { "tier": "fast", "run": "pnpm vitest run tests/regression tests/unit" },
+    "backend-ion/**": { "tier": "fast", "run": "pnpm vitest run tests/regression tests/unit" },
+    "prisma/**": { "tier": "fast", "run": "pnpm prisma validate" },
+    "src/app/**": { "tier": "browser", "run": "pnpm test:e2e" },
+    "src/components/**": { "tier": "browser", "run": "pnpm test:e2e" }
+  },
+  "always": "pnpm exec tsc --noEmit",
+  "unverified": {
+    "backend-ion/**": [
+      "the deployed Lambda runtime, SST deploy only (see #83, the ERR_REQUIRE_ESM cold-start crash)",
+      "live Google Merchant API behavior, covered only by the full tier"
+    ],
+    "src/app/**": [
+      "production Clerk auth; e2e runs against a stored session state"
+    ]
+  },
+  "budgets": { "fast": 120, "browser": 360, "full": 900 },
+  "ignore": ["**/*.md", "docs/**", "content/**", "exports/**", "playwright-report/**", "**/*.png"]
+}
+```
+
+- [ ] **Step 6: Confirm the referenced test paths exist**
+
+```bash
+cd "C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC/SnowPipe"
+ls -d tests/regression tests/unit 2>/dev/null
+```
+
+If `tests/unit` does not exist, remove it from the three `run` strings so the command does not fail on a missing path. The manifest must reference only paths that exist.
+
+- [ ] **Step 7: Run the dispatcher against SnowPipe end to end**
+
+```bash
+cd "C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC/snowforge-verify"
+echo '{"session_id":"manual","cwd":"C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC/SnowPipe"}' | node src/cli.mjs; echo "exit=$?"
+```
+
+Expected: `VERIFY PASS  SnowPipe  fast (Ns)`, `exit=0`, plus the `backend-ion` disclosure lines if backend files are in the change set. Record the observed wall-clock seconds — spec §14 open question 2 asks for this number.
+
+- [ ] **Step 8: Commit both repos**
+
+```bash
+cd "C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC/SnowPipe"
+git add .claude/verify.json tests/regression/export-filters-82.test.ts
+git commit -m "test(#82): lock the exportFilters shape contract, add verify manifest"
+```
+
+---
+
+## Task 10: SnowPipe browser tier preflight
+
+**Files:**
+- Modify: `snowforge-verify/src/run.mjs`
+- Test: `snowforge-verify/tests/preflight.test.mjs`
+
+**Interfaces:**
+- Consumes: `runAll` from `src/run.mjs`.
+- Produces: `preflight(repoRoot, tier, checks?): {ok: true} | {ok: false, remedy: string}`, called before browser-tier runs. Returns `blocked` with an actionable remedy rather than letting Playwright fail with an opaque error.
+
+SnowPipe's `playwright.config.ts` requires `tests/playwright/.clerk/user.json` for its `storageState`, and boots its own dev server on port 3003. A missing auth state or an occupied port is an inability to verify, not a defect.
+
+- [ ] **Step 1: Write the failing test**
+
+`tests/preflight.test.mjs`:
+
+```javascript
+import { describe, it, expect } from 'vitest';
+import { preflight } from '../src/run.mjs';
+
+const checks = (over = {}) => ({
+  fileExists: () => true,
+  browsersInstalled: () => true,
+  ...over,
+});
+
+describe('preflight', () => {
+  it('is a no-op for the fast tier', () => {
+    expect(preflight('/repo', 'fast', checks({ browsersInstalled: () => false }))).toEqual({ ok: true });
+  });
+
+  it('passes when browser prerequisites are present', () => {
+    expect(preflight('/repo', 'browser', checks())).toEqual({ ok: true });
+  });
+
+  it('blocks with an install remedy when browsers are missing', () => {
+    const r = preflight('/repo', 'browser', checks({ browsersInstalled: () => false }));
+    expect(r.ok).toBe(false);
+    expect(r.remedy).toContain('playwright install');
+  });
+
+  it('blocks with a seed remedy when the stored auth state is missing', () => {
+    const r = preflight('/repo', 'browser', checks({ fileExists: () => false }));
+    expect(r.ok).toBe(false);
+    expect(r.remedy).toContain('.clerk/user.json');
+  });
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `pnpm test tests/preflight.test.mjs`
+Expected: FAIL — `preflight` is not exported.
+
+- [ ] **Step 3: Implement**
+
+Add these two lines to the **imports at the top** of `src/run.mjs`, alongside the existing `spawnSync` import:
+
+```javascript
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+```
+
+Then append the rest to the bottom of `src/run.mjs`:
+
+```javascript
+const defaultChecks = {
+  fileExists: (p) => existsSync(p),
+  browsersInstalled: (repoRoot) => {
+    const r = spawnSync('pnpm exec playwright --version', {
+      cwd: repoRoot, shell: true, encoding: 'utf8', timeout: 20000,
+    });
+    return r.status === 0;
+  },
+};
+
+/**
+ * Confirm a tier can actually run before running it. An unmet prerequisite
+ * is `blocked` with a remedy, never a silent pass and never a bare failure.
+ */
+export function preflight(repoRoot, tier, checks = defaultChecks) {
+  if (tier !== 'browser') return { ok: true };
+
+  if (!checks.browsersInstalled(repoRoot)) {
+    return { ok: false, remedy: 'Playwright browsers are missing. Run: pnpm exec playwright install chromium' };
+  }
+
+  const authState = path.join(repoRoot, 'tests', 'playwright', '.clerk', 'user.json');
+  if (!checks.fileExists(authState)) {
+    return {
+      ok: false,
+      remedy: 'Stored auth state tests/playwright/.clerk/user.json is missing. Run the Playwright setup project first: pnpm exec playwright test --project=setup',
+    };
+  }
+
+  return { ok: true };
+}
+```
+
+- [ ] **Step 4: Wire preflight into the CLI**
+
+In `src/cli.mjs`, immediately after computing `budget` and before `d.runAll(...)`:
+
+```javascript
+    const pre = (d.preflight ?? preflight)(repoRoot, plan.tier);
+    if (!pre.ok) {
+      d.writeVerdict(hookInput.session_id, key, 'blocked');
+      const text = `VERIFY BLOCKED  ${manifest.repo}  ${plan.tier}\n  ${pre.remedy}`;
+      const { exitCode } = decide('blocked', d.mode);
+      return { exitCode, stderr: exitCode === 2 ? text : '', stdout: text };
+    }
+```
+
+Add `preflight` to the `src/run.mjs` import in `src/cli.mjs`.
+
+- [ ] **Step 5: Run the full suite**
+
+Run: `pnpm test`
+Expected: PASS, all suites green. The existing `cli.test.mjs` fakes do not set `preflight`, so the real one runs and returns `{ok: true}` for the fast tier.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add -A
+git commit -m "feat: browser-tier preflight with actionable remedies"
+```
+
+---
+
+## Task 11: Register the blocking Stop hook
+
+**Files:**
+- Modify: `C:\Users\alexi\.claude\settings.json`
+
+**Interfaces:**
+- Consumes: `snowforge-verify/src/cli.mjs`.
+- Produces: a registered `Stop` hook. This is the step that makes verification non-optional.
+
+- [ ] **Step 1: Back up the current settings**
+
+```bash
+cp "C:/Users/alexi/.claude/settings.json" "C:/Users/alexi/.claude/settings.json.bak-verify-hook"
+```
+
+Expected: backup written. The file currently has no `hooks` key.
+
+- [ ] **Step 2: Add the hook**
+
+Add this top-level key to `C:\Users\alexi\.claude\settings.json`, preserving every existing key:
+
+```json
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC/snowforge-verify/src/cli.mjs",
+            "timeout": 540,
+            "statusMessage": "Verifying changes"
+          }
+        ]
+      }
+    ]
+  }
+```
+
+The 540s timeout sits under the 600s default and above the 480s hook-invoked budget total, so the dispatcher always reports before the harness gives up.
+
+- [ ] **Step 3: Validate the JSON**
+
+```bash
+node -e "JSON.parse(require('fs').readFileSync('C:/Users/alexi/.claude/settings.json','utf8')); console.log('valid')"
+```
+
+Expected: `valid`. A malformed settings file breaks every session, so do not skip this.
+
+- [ ] **Step 4: Verify the guard in a throwaway repo**
+
+```bash
+mkdir -p "$TMPDIR/verify-guard-check" && cd "$TMPDIR/verify-guard-check" && git init -q && echo x > a.ts && git add a.ts
+echo '{"session_id":"guard","cwd":"'"$PWD"'"}' | node "C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC/snowforge-verify/src/cli.mjs"; echo "exit=$?"
+```
+
+Expected: no output, `exit=0`. A repo outside SnowForgeLLC is untouched.
+
+- [ ] **Step 5: Verify the block fires in a real session**
+
+Start a Claude Code session in SnowPipe, make a trivial edit to a file under `src/server/streaming/`, and end the turn.
+
+Expected: the Stop hook runs the fast tier. On green, the session ends and `VERIFY PASS SnowPipe fast (Ns)` appears in the debug log. To confirm blocking, temporarily break an assertion in `tests/regression/export-filters-82.test.ts` and end the turn again: the stop must be blocked with the failing output, and blocked **once** — a second stop with the same unchanged tree must be allowed through by the state-key cache.
+
+- [ ] **Step 6: Revert the deliberate breakage**
+
+```bash
+cd "C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC/SnowPipe"
+git checkout -- tests/regression/export-filters-82.test.ts
+```
+
+- [ ] **Step 7: Commit the dispatcher repo and record the rollout**
+
+```bash
+cd "C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC/snowforge-verify"
+git add -A && git commit -m "chore: phases 1-3 complete, stop hook registered"
+```
+
+Then update `C:\Users\alexi\.claude\TODO.md` with a dated entry recording that phases 1–3 are live, the measured browser-tier wall-clock from Task 9 Step 7, and that phases 4–8 (SnowCards, OnDeck, remaining repos, `/verify-init`, autobuild `report` mode) remain.
+
+---
+
+## Rollback
+
+If the hook proves disruptive, remove the `hooks` key from `C:\Users\alexi\.claude\settings.json` or restore `settings.json.bak-verify-hook`. The dispatcher stays installed and runnable by hand, and every manifest stays valid — nothing else depends on the hook being registered.

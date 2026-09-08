@@ -47,9 +47,12 @@ facts.
 
 1. **`Stop` hook** — one entry in `C:\Users\alexi\.claude\settings.json`. Fires on every
    session stop, in every directory.
-2. **Dispatcher** — `C:\Users\alexi\.claude\scripts\verify-dispatch.mjs`. All logic lives
-   here: repo detection, change-set computation, tier routing, budget enforcement, result
-   caching, output formatting.
+2. **Dispatcher** — `C:\Users\alexi\Documents\Diaz\Repositories\SnowForgeLLC\snowforge-verify`,
+   published as `@snowforge/verify`. All logic lives here: repo detection, change-set
+   computation, tier routing, budget enforcement, result caching, output formatting. It is a
+   tracked repo rather than a loose script in `~\.claude\scripts\`, because §11 requires
+   tests written first and an untracked directory cannot hold them. It follows the existing
+   `snowforge-notify` convention for standalone `@snowforge/*` packages.
 3. **Per-repo manifest** — `{repo}\.claude\verify.json`. Declares surfaces, the command per
    surface, and what each surface cannot prove. Tracked in git.
 4. **Onboarding skill** — `/verify-init`. Infers a starting manifest from `package.json`
