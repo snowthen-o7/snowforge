@@ -924,7 +924,9 @@ git commit -m "feat: route changed paths to verification tiers"
 
 **Interfaces:**
 - Consumes: `runGit` from `src/changes.mjs`.
-- Produces: `stateKey(repoRoot, git?): string` — sha1 of `HEAD` plus the full working-tree diff. `readVerdict(sessionId, key, io?): string | null`. `writeVerdict(sessionId, key, verdict, io?): void`. Cache lives at `C:\Users\alexi\.claude\verify-cache\{session_id}.json`.
+- Produces: `stateKey(repoRoot, git?, read?): string` — sha1 over `HEAD`, the tracked working-tree diff, and the sorted paths **and contents** of every untracked file. `readVerdict(sessionId, key, io?): string | null`. `writeVerdict(sessionId, key, verdict, io?): void`. Cache lives at `C:\Users\alexi\.claude\verify-cache\{session_id}.json`.
+
+**Why untracked files are hashed:** verified directly — adding an untracked file leaves `git diff HEAD` at zero bytes, so a diff-only key cannot see a brand-new source file. An agent that responds to a blocked verification by adding a file would produce an identical key, hit the cached verdict, and have its fix skipped without ever re-running. Both the file list and the file contents matter: hashing only the list would miss subsequent edits to a new file.
 
 This is the loop protection required by spec §3: the `Stop` hook input carries no `stop_hook_active` field, so the dispatcher must decide for itself whether it has already judged this exact code state.
 
@@ -936,8 +938,19 @@ This is the loop protection required by spec §3: the `Stop` hook input carries 
 import { describe, it, expect } from 'vitest';
 import { stateKey, readVerdict, writeVerdict } from '../src/state.mjs';
 
-const gitWith = (head, diff) => (_root, args) =>
-  args[0] === 'rev-parse' ? head : diff;
+/** Fake git covering the three subcommands stateKey issues. */
+const gitWith = (head, diff, untracked = '') => (_root, args) => {
+  if (args[0] === 'rev-parse') return head;
+  if (args[0] === 'ls-files') return untracked;
+  return diff;
+};
+
+/** Fake file reader: returns canned contents per path suffix. */
+const readWith = (contents = {}) => (p) => {
+  const key = Object.keys(contents).find((k) => String(p).endsWith(k));
+  if (!key) throw new Error(`no such file: ${p}`);
+  return Buffer.from(contents[key]);
+};
 
 /** In-memory stand-in for the cache file. */
 function memIO() {
@@ -954,21 +967,56 @@ function memIO() {
 }
 
 describe('stateKey', () => {
+  const read = readWith({ 'new.ts': 'hello', 'other.ts': 'world' });
+
   it('is stable for an identical tree', () => {
     const git = gitWith('abc123\n', 'diff body');
-    expect(stateKey('/repo', git)).toBe(stateKey('/repo', git));
+    expect(stateKey('/repo', git, read)).toBe(stateKey('/repo', git, read));
   });
 
   it('changes when the working tree changes', () => {
-    const a = stateKey('/repo', gitWith('abc123\n', 'one'));
-    const b = stateKey('/repo', gitWith('abc123\n', 'two'));
+    const a = stateKey('/repo', gitWith('abc123\n', 'one'), read);
+    const b = stateKey('/repo', gitWith('abc123\n', 'two'), read);
     expect(a).not.toBe(b);
   });
 
   it('changes when HEAD moves even with an identical diff', () => {
-    const a = stateKey('/repo', gitWith('abc123\n', 'same'));
-    const b = stateKey('/repo', gitWith('def456\n', 'same'));
+    const a = stateKey('/repo', gitWith('abc123\n', 'same'), read);
+    const b = stateKey('/repo', gitWith('def456\n', 'same'), read);
     expect(a).not.toBe(b);
+  });
+
+  // `git diff HEAD` is blind to untracked files. Without these, an agent that
+  // fixes a blocked verification by ADDING a file keeps the same key, hits the
+  // cached verdict, and has its fix silently skipped.
+  it('changes when an untracked file appears, with no tracked diff at all', () => {
+    const clean = stateKey('/repo', gitWith('abc123\n', '', ''), read);
+    const added = stateKey('/repo', gitWith('abc123\n', '', 'new.ts\n'), read);
+    expect(added).not.toBe(clean);
+  });
+
+  it('changes when an untracked file\'s contents change', () => {
+    const git = gitWith('abc123\n', '', 'new.ts\n');
+    const before = stateKey('/repo', git, readWith({ 'new.ts': 'hello' }));
+    const after = stateKey('/repo', git, readWith({ 'new.ts': 'goodbye' }));
+    expect(before).not.toBe(after);
+  });
+
+  it('changes when a second untracked file appears', () => {
+    const one = stateKey('/repo', gitWith('abc123\n', '', 'new.ts\n'), read);
+    const two = stateKey('/repo', gitWith('abc123\n', '', 'new.ts\nother.ts\n'), read);
+    expect(one).not.toBe(two);
+  });
+
+  it('is order-independent for the untracked listing', () => {
+    const a = stateKey('/repo', gitWith('abc123\n', '', 'new.ts\nother.ts\n'), read);
+    const b = stateKey('/repo', gitWith('abc123\n', '', 'other.ts\nnew.ts\n'), read);
+    expect(a).toBe(b);
+  });
+
+  it('does not throw when an untracked file cannot be read', () => {
+    const git = gitWith('abc123\n', '', 'vanished.ts\n');
+    expect(() => stateKey('/repo', git, readWith({}))).not.toThrow();
   });
 });
 
@@ -1029,11 +1077,40 @@ const defaultIO = {
   mkdir: (d) => mkdirSync(d, { recursive: true }),
 };
 
-/** Identity of the exact code state: HEAD plus the full working-tree diff. */
-export function stateKey(repoRoot, git = runGit) {
+const defaultReadFile = (p) => readFileSync(p);
+
+/**
+ * Identity of the exact code state: HEAD, the tracked working-tree diff, and
+ * every untracked file's path and contents.
+ *
+ * The untracked half is load-bearing. `git diff HEAD` reports tracked changes
+ * only — a brand-new source file is completely invisible to it (verified
+ * directly: adding an untracked file leaves `git diff HEAD` at zero bytes).
+ * Without this, an agent that responds to a blocked verification by ADDING a
+ * file produces an unchanged key, hits the cached verdict, and has its fix
+ * silently skipped. `ls-files --others --exclude-standard` honours .gitignore,
+ * so this walks genuinely new files only and never descends into node_modules.
+ */
+export function stateKey(repoRoot, git = runGit, read = defaultReadFile) {
   const head = git(repoRoot, ['rev-parse', 'HEAD']).trim();
   const diff = git(repoRoot, ['diff', 'HEAD']);
-  return createHash('sha1').update(`${head}\n${diff}`).digest('hex');
+  const untracked = git(repoRoot, ['ls-files', '--others', '--exclude-standard'])
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .sort();
+
+  const h = createHash('sha1').update(`${head}\n${diff}\n`);
+  for (const rel of untracked) {
+    h.update(`\n--- ${rel}\n`);
+    try {
+      h.update(read(path.join(repoRoot, rel)));
+    } catch {
+      // A file that vanished mid-run still contributes its path above.
+      h.update('<unreadable>');
+    }
+  }
+  return h.digest('hex');
 }
 
 function cachePath(sessionId) {
