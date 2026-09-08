@@ -1484,6 +1484,7 @@ function deps(over = {}) {
     readVerdict: () => null,
     writeVerdict: () => {},
     runAll: () => ({ verdict: 'pass', failed: null, output: '', seconds: 3 }),
+    logError: () => {},
     mode: 'block',
     ...over,
   };
@@ -1587,6 +1588,27 @@ describe('main', () => {
     expect(r.stdout).toMatch(/verify.*error/i);
   });
 
+  // Exiting 0 is what keeps a broken dispatcher from wedging every session,
+  // which also makes the log the only trace a crash leaves — stdout on a Stop
+  // hook is debug-only. Without it, verification dies silently everywhere.
+  it('logs the error when a dependency throws', () => {
+    const logged = [];
+    const r = main(input, deps({
+      getChangedFiles: () => { throw new Error('git exploded'); },
+      logError: (e) => logged.push(e.message),
+    }));
+    expect(r.exitCode).toBe(0);
+    expect(logged).toEqual(['git exploded']);
+  });
+
+  it('still exits 0 when logging itself throws', () => {
+    const r = main(input, deps({
+      getChangedFiles: () => { throw new Error('git exploded'); },
+      logError: () => { throw new Error('disk full'); },
+    }));
+    expect(r.exitCode).toBe(0);
+  });
+
   // A repo whose only surface is full-tier runs nothing inside the hook. It
   // must still say so, or it verifies nothing on every stop, silently.
   it('reports deferred work instead of exiting silently when nothing runs in the hook', () => {
@@ -1621,20 +1643,41 @@ Expected: FAIL — cannot resolve `../src/cli.mjs`.
 ```javascript
 #!/usr/bin/env node
 import { pathToFileURL } from 'node:url';
+import { appendFileSync, mkdirSync } from 'node:fs';
+import path from 'node:path';
 import { findRepoRoot, isInScope } from './repo.mjs';
 import { getChangedFiles } from './changes.mjs';
 import { loadManifest } from './manifest.mjs';
 import { route } from './route.mjs';
-import { stateKey, readVerdict, writeVerdict } from './state.mjs';
+import { stateKey, readVerdict, writeVerdict, CACHE_DIR } from './state.mjs';
 import { runAll } from './run.mjs';
 import { decide, formatPass, formatFailure } from './report.mjs';
 
 const NO_OP = { exitCode: 0, stderr: '', stdout: '' };
 
+/**
+ * Durable record of a dispatcher crash (spec §10).
+ *
+ * The catch below exits 0 so a broken dispatcher cannot wedge every session
+ * in every repo. But on a Stop hook stdout goes only to a debug log, so
+ * without this file a crash would disable verification everywhere,
+ * permanently and invisibly — the silent failure this tool exists to stop,
+ * arriving through its own error handler.
+ */
+const defaultLogError = (err) => {
+  mkdirSync(CACHE_DIR, { recursive: true });
+  appendFileSync(
+    path.join(CACHE_DIR, 'errors.log'),
+    `${new Date().toISOString()} ${err?.stack ?? String(err)}\n`,
+    'utf8',
+  );
+};
+
 export function main(hookInput, deps) {
   const d = {
     findRepoRoot, isInScope, getChangedFiles, loadManifest,
     stateKey, readVerdict, writeVerdict, runAll,
+    logError: defaultLogError,
     mode: process.env.SNOWFORGE_VERIFY_MODE ?? 'block',
     maxTier: 'browser',
     ...deps,
@@ -1706,7 +1749,16 @@ export function main(hookInput, deps) {
     const { exitCode } = decide(result.verdict, d.mode);
     return { exitCode, stderr: exitCode === 2 ? text : '', stdout: text };
   } catch (err) {
-    // A broken dispatcher must never wedge every session in every repo.
+    // A broken dispatcher must never wedge every session in every repo, so
+    // this exits 0. That makes the log file the only trace a crash leaves:
+    // stdout on a Stop hook is debug-only, so without it verification would
+    // die silently and permanently everywhere. Logging must not itself be
+    // able to wedge the session, hence the inner catch.
+    try {
+      d.logError(err);
+    } catch {
+      /* nothing left to do; never rethrow from the safety net */
+    }
     return { exitCode: 0, stderr: '', stdout: `verify: internal error, skipped (${err.message})` };
   }
 }
