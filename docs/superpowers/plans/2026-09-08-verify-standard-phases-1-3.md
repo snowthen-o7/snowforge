@@ -1747,14 +1747,34 @@ Expected: PASS, all eight suites green with no failures.
 
 - [ ] **Step 5: Smoke-test manually against a real repo, with no hook registered**
 
+**The target repo must actually have changed files, or this step proves nothing.** The dispatcher no-ops before the manifest check when the change set is empty, which is correct behaviour and indistinguishable at the shell from the entrypoint never firing. Pick a target and confirm its change set first:
+
 ```bash
 cd "C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC/snowforge-verify"
-echo '{"session_id":"manual","cwd":"C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC/SnowPipe"}' | node src/cli.mjs; echo "exit=$?"
+TARGET="C:/Users/alexi/Documents/Diaz/Repositories/SnowForgeLLC/SnowForge"
+node -e "import('./src/changes.mjs').then(m=>console.log('changed files:', m.getChangedFiles(process.argv[1]).length))" "$TARGET"
 ```
 
-Expected: the missing-manifest block, `exit=2`, mentioning `/verify-init`. SnowPipe has no manifest yet, which is exactly the fail-loud path from spec §8.
+If that prints 0, choose a different SnowForge repo that has uncommitted or unpushed work. Then:
 
-**This step is the only check that the entrypoint works at all, so do not skip it or treat it as a formality.** Every unit test in this task calls `main()` directly and would still pass if the entrypoint block never executed. If you see `exit=0` with NO output whatsoever, the guard is not matching and the module is loading without running — that is the silent-death failure, not a passing test. Report it rather than moving on.
+```bash
+echo "{\"session_id\":\"manual\",\"cwd\":\"$TARGET\"}" | node src/cli.mjs; echo "exit=$?"
+```
+
+Expected: the missing-manifest block, `exit=2`, mentioning `/verify-init` — the fail-loud onboarding path from spec §8.
+
+**This step is the only check that the entrypoint works at all, so do not skip it or treat it as a formality.** Every unit test in this task calls `main()` directly and would still pass if the entrypoint block never executed.
+
+**Disambiguating the two ways this prints nothing**, which matters because one is correct and the other means the tool is dead:
+
+- `exit=0`, no output, **and the change count above was 0** — a legitimate no-op. Nothing changed, so nothing to verify.
+- `exit=0`, no output, **but the change count was non-zero** — the entrypoint guard is not matching. The module loaded and ran nothing. Stop and report; do not record this as a pass.
+
+- [ ] **Step 5b: Confirm the block fires only once for an unchanged state**
+
+Run the exact same command from Step 5 a second time, with the same `session_id`.
+
+Expected: `exit=0` and no output. The first run recorded a `blocked` verdict against the state key, so the second must not block. If it blocks again, a manifest-less repo would block on every stop forever with no escape, because nothing the agent does to the code makes a manifest appear.
 
 - [ ] **Step 6: Verify the home-directory guard**
 
