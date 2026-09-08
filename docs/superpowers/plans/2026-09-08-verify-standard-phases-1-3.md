@@ -1497,6 +1497,36 @@ describe('main', () => {
     expect(r.stderr).toContain('/verify-init');
   });
 
+  // Nothing the agent does to the code makes a manifest appear, so without a
+  // recorded verdict this branch would block on every stop, forever, and the
+  // session could never end. Spec §8 says block once.
+  it('records a verdict when blocking on a missing manifest', () => {
+    const written = [];
+    const r = main(input, deps({
+      loadManifest: () => ({ ok: false, reason: 'missing' }),
+      writeVerdict: (_session, k, v) => written.push([k, v]),
+    }));
+    expect(r.exitCode).toBe(2);
+    expect(written).toEqual([['key1', 'blocked']]);
+  });
+
+  it('does not block a missing manifest twice for the same state', () => {
+    const r = main(input, deps({
+      loadManifest: () => ({ ok: false, reason: 'missing' }),
+      readVerdict: () => 'blocked',
+    }));
+    expect(r.exitCode).toBe(0);
+  });
+
+  it('records a verdict when blocking on an invalid manifest', () => {
+    const written = [];
+    main(input, deps({
+      loadManifest: () => ({ ok: false, reason: 'bad tier "turbo"' }),
+      writeVerdict: (_session, k, v) => written.push([k, v]),
+    }));
+    expect(written).toEqual([['key1', 'blocked']]);
+  });
+
   it('blocks with the validation reason when the manifest is invalid', () => {
     const r = main(input, deps({ loadManifest: () => ({ ok: false, reason: 'bad tier "turbo"' }) }));
     expect(r.exitCode).toBe(2);
@@ -1596,8 +1626,17 @@ export function main(hookInput, deps) {
     const changed = d.getChangedFiles(repoRoot);
     if (changed.length === 0) return NO_OP;
 
+    // One verdict per distinct code state, computed BEFORE any branch that can
+    // block. Every blocking path must record it. Otherwise the same unchanged
+    // state blocks again on the next stop, and the session can never end —
+    // which is what happens to a repo with no manifest, since nothing the
+    // agent does to the code makes the manifest appear.
+    const key = d.stateKey(repoRoot);
+    if (d.readVerdict(hookInput.session_id, key) !== null) return NO_OP;
+
     const loaded = d.loadManifest(repoRoot);
     if (!loaded.ok) {
+      d.writeVerdict(hookInput.session_id, key, 'blocked');
       const reason =
         loaded.reason === 'missing'
           ? [
@@ -1629,9 +1668,6 @@ export function main(hookInput, deps) {
       }
       return NO_OP;
     }
-
-    const key = d.stateKey(repoRoot);
-    if (d.readVerdict(hookInput.session_id, key) !== null) return NO_OP;
 
     const budget = manifest.budgets[plan.tier] ?? manifest.budgets.fast;
     const result = d.runAll(repoRoot, plan.runs, budget);
