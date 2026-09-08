@@ -2764,6 +2764,130 @@ Then commit SnowPipe's manifest separately in that repo.
 
 ---
 
+## Task 14: Classified tooling blocks need a sentinel too
+
+Task 13 made a tooling failure report as `blocked` with a remedy instead of `fail`. It still
+records that verdict against the **code-state key**, so it re-blocks on every edit. Measured
+directly against the real SnowPipe manifest: three stops with state keys `codeA`, `codeB`,
+`codeC` all returned exit 2, and all three keys were recorded.
+
+An invalid Clerk key is not something an edit can fix. This is the fourth instance of the
+failure class the spec now states as the sentinel rule.
+
+**Files:**
+- Modify: `snowforge-verify/src/cli.mjs`
+- Test: `snowforge-verify/tests/cli.test.mjs`
+
+- [ ] **Step 1: Write the failing tests**
+
+```javascript
+  // Fourth instance of the sentinel rule: a rejected credential is not
+  // something the agent can fix by editing, so keying it on the code state
+  // re-blocks forever.
+  it('does not re-block a classified tooling failure after the code changes', () => {
+    const store = {};
+    const shared = {
+      loadManifest: () => ({
+        ok: true,
+        manifest: {
+          repo: 'SnowPipe',
+          surfaces: { 'src/**': { tier: 'fast', run: 'pnpm test' } },
+          always: null, unverified: {}, ignore: [],
+          infrastructure: [{ match: 'ClerkAPIResponseError', remedy: 'refresh the key' }],
+          budgets: { fast: 300, browser: 360, full: 900 },
+        },
+      }),
+      runAll: () => ({ verdict: 'fail', failed: 'pnpm test:e2e', output: 'ClerkAPIResponseError: Unauthorized', seconds: 9 }),
+      readVerdict: (_s, k) => store[k] ?? null,
+      writeVerdict: (_s, k, v) => { store[k] = v; },
+    };
+    expect(main(input, deps({ ...shared, stateKey: () => 'codeA' })).exitCode).toBe(2);
+    expect(main(input, deps({ ...shared, stateKey: () => 'codeB' })).exitCode).toBe(0);
+    expect(Object.keys(store).every((k) => k.startsWith('infra:'))).toBe(true);
+  });
+
+  // Distinct causes must not mask one another: fixing Clerk should not
+  // suppress a later, different tooling block.
+  it('keeps distinct tooling causes on distinct sentinels', () => {
+    const store = {};
+    const mk = (output, match) => deps({
+      loadManifest: () => ({
+        ok: true,
+        manifest: {
+          repo: 'SnowPipe',
+          surfaces: { 'src/**': { tier: 'fast', run: 'pnpm test' } },
+          always: null, unverified: {}, ignore: [],
+          infrastructure: [
+            { match: 'ClerkAPIResponseError', remedy: 'refresh the key' },
+            { match: "Executable doesn't exist at", remedy: 'install chromium' },
+          ],
+          budgets: { fast: 300, browser: 360, full: 900 },
+        },
+      }),
+      runAll: () => ({ verdict: 'fail', failed: 'x', output, seconds: 1 }),
+      readVerdict: (_s, k) => store[k] ?? null,
+      writeVerdict: (_s, k, v) => { store[k] = v; },
+      stateKey: () => 'same',
+    });
+    expect(main(input, mk('ClerkAPIResponseError: Unauthorized')).exitCode).toBe(2);
+    expect(main(input, mk("Executable doesn't exist at C:/x")).exitCode).toBe(2);
+    expect(Object.keys(store)).toHaveLength(2);
+  });
+
+  // A genuine defect IS something an edit can fix, so it must keep using the
+  // code-state key and must block again when the code changes and still fails.
+  it('still re-blocks a genuine failure after the code changes', () => {
+    const store = {};
+    const shared = {
+      runAll: () => ({ verdict: 'fail', failed: 'pnpm test', output: 'AssertionError: nope', seconds: 4 }),
+      readVerdict: (_s, k) => store[k] ?? null,
+      writeVerdict: (_s, k, v) => { store[k] = v; },
+    };
+    expect(main(input, deps({ ...shared, stateKey: () => 'codeA' })).exitCode).toBe(2);
+    expect(main(input, deps({ ...shared, stateKey: () => 'codeB' })).exitCode).toBe(2);
+  });
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `pnpm test tests/cli.test.mjs`
+Expected: the first two fail (second stop returns 2; keys are state keys). The third should
+already pass — it pins behaviour that must NOT change.
+
+- [ ] **Step 3: Implement**
+
+In `src/cli.mjs`, where the reclassified outcome is handled, gate and record on a sentinel
+keyed by the matched pattern, and do not record the state key for that path:
+
+```javascript
+    if (outcome.remedy) {
+      // Sentinel rule: a rejected credential or a missing binary is not
+      // something an edit can clear, so keying this on the code state would
+      // re-block on every edit. Key it on the cause instead. The matched
+      // pattern is part of the key so fixing one cause cannot mask another.
+      const ik = infraKey(`classified:${hit.match}`, repoRoot);
+      if (d.readVerdict(hookInput.session_id, ik) !== null) return NO_OP;
+      record(ik, 'blocked');
+      note(manifest.repo, plan.tier, 'blocked', outcome.seconds);
+      const text = `VERIFY BLOCKED  ${manifest.repo}  ${plan.tier}\n  ${outcome.remedy}`;
+      const { exitCode } = decide('blocked', d.mode);
+      return { exitCode, stderr: exitCode === 2 ? text : '', stdout: text };
+    }
+```
+
+Keep the genuine-failure path exactly as it is: it records the state key, because a defect
+IS something an edit can fix.
+
+- [ ] **Step 4: Run the full suite and commit**
+
+```bash
+pnpm test
+git add src/cli.mjs tests/cli.test.mjs
+git commit -m "fix: classified tooling blocks re-fired on every edit"
+```
+
+---
+
 ## Rollback
 
 If the hook proves disruptive, remove the `hooks` key from `C:\Users\alexi\.claude\settings.json` or restore `settings.json.bak-verify-hook`. The dispatcher stays installed and runnable by hand, and every manifest stays valid — nothing else depends on the hook being registered.

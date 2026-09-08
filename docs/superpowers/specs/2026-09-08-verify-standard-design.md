@@ -88,6 +88,23 @@ flowchart TD
     K -->|could not run| N[Cache blocked, BLOCK<br/>with tooling remedy]
 ```
 
+### The sentinel rule
+
+**Any block whose cause the agent cannot clear by editing code MUST be recorded against an
+`infra:<cause>:<repo>` sentinel, never against the code-state key alone.**
+
+This has been violated four separate times during construction — the missing manifest, the
+invalid manifest, a failed preflight, and a classified tooling failure — each found only
+after the fact. The shape is always the same and always looks correct in isolation: the
+block is recorded, so it appears loop-protected. But the natural response to a block is to
+edit something, which mints a new state key, and the cause is still there. The result is a
+session that can never end.
+
+The state key answers "have I already judged this code?". It cannot answer "is this
+condition still true?", and every infrastructure cause is the second question. When adding
+any new blocking branch, ask which question it is. If a code edit cannot resolve it, it
+needs a sentinel.
+
 ### Why the state key exists
 
 The `Stop` hook input carries `session_id`, `prompt_id`, `transcript_path`, `cwd`,
