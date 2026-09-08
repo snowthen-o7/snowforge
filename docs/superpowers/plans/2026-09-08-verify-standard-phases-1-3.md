@@ -2108,6 +2108,25 @@ describe('preflight', () => {
     expect(r.ok).toBe(false);
     expect(r.remedy).toContain('.clerk/user.json');
   });
+
+  it('is a no-op for the skip tier', () => {
+    expect(preflight('/repo', 'skip', checks({ browsersInstalled: () => false }))).toEqual({ ok: true });
+  });
+
+  // `route` puts every surface at or below the cap into one run set, so a
+  // `full` plan can still carry a browser-tier Playwright command. Exempting
+  // `full` would run it with no prerequisite check at all.
+  it('also checks prerequisites for the full tier, which can carry browser commands', () => {
+    const r = preflight('/repo', 'full', checks({ browsersInstalled: () => false }));
+    expect(r.ok).toBe(false);
+    expect(r.remedy).toContain('playwright install');
+  });
+
+  it('blocks the full tier on a missing auth state too', () => {
+    const r = preflight('/repo', 'full', checks({ fileExists: () => false }));
+    expect(r.ok).toBe(false);
+    expect(r.remedy).toContain('.clerk/user.json');
+  });
 });
 ```
 
@@ -2155,11 +2174,28 @@ const defaultChecks = {
       cwd: repoRoot, shell: true, encoding: 'utf8', timeout: 60000,
     });
     if (r.status !== 0) return false;
-    const locations = [...String(r.stdout).matchAll(/Install location:\s*(.+)/g)]
-      .map((m) => m[1].trim())
-      .filter(Boolean);
-    if (locations.length === 0) return true; // cannot determine; do not block
-    return locations.some((p) => existsSync(p));
+
+    // The dry-run lists every browser Playwright knows about PLUS non-browser
+    // tooling — measured here: chromium, chromium-headless-shell, firefox,
+    // webkit, ffmpeg and winldd, six entries, printed whether or not each is
+    // on disk. So "any location exists" is not a usable signal: a leftover
+    // ffmpeg from an interrupted install would mask a missing chromium,
+    // preflight would pass, and the real run would fail at browser launch and
+    // be reported as `fail` — the misdiagnosis this whole function prevents.
+    //
+    // Requiring ALL of them would be wrong in the other direction: a machine
+    // that never installed webkit would be blocked forever for a repo that
+    // only drives chromium. So check chromium specifically. Every SnowForge
+    // Playwright config uses it; a repo that drives firefox or webkit instead
+    // would need this widened, which is why the entry name is matched rather
+    // than a position assumed.
+    const entries = [
+      ...String(r.stdout).matchAll(/^(\S[^\n]*?)\r?\n\s*Install location:\s*(.+)$/gm),
+    ].map((m) => ({ name: m[1].trim(), location: m[2].trim() }));
+
+    const chromium = entries.find((e) => /playwright chromium v/i.test(e.name));
+    if (!chromium) return true; // unrecognised output; do not block
+    return existsSync(chromium.location);
   },
 };
 
@@ -2168,7 +2204,12 @@ const defaultChecks = {
  * is `blocked` with a remedy, never a silent pass and never a bare failure.
  */
 export function preflight(repoRoot, tier, checks = defaultChecks) {
-  if (tier !== 'browser') return { ok: true };
+  // Only the cheap tiers skip. `full` is not exempt: `route` puts every matched
+  // surface at or below the cap into one run set, so a manual `--full` run
+  // touching both a browser-tier and a full-tier surface reports tier `full`
+  // while still executing the Playwright command. Exempting `full` would let
+  // that command run with no prerequisite check at all.
+  if (tier === 'skip' || tier === 'fast') return { ok: true };
 
   if (!checks.browsersInstalled(repoRoot)) {
     return { ok: false, remedy: 'Playwright browsers are missing. Run: pnpm exec playwright install chromium' };
