@@ -2339,6 +2339,239 @@ Then update `C:\Users\alexi\.claude\TODO.md` with a dated entry recording that p
 
 ---
 
+---
+
+## Task 12: Final-review remediation (blocking, before registration)
+
+The final whole-branch review returned **"not yet"** with three blocking findings. All three
+are in `src/cli.mjs`. Two are residual instances of failure classes this build already fixed
+once — an infinite-block path and a never-block path — reappearing in new guises.
+
+**Files:**
+- Modify: `snowforge-verify/src/cli.mjs`
+- Test: `snowforge-verify/tests/cli.test.mjs`
+
+**Interfaces:**
+- Consumes: everything `main` already consumes, plus `CACHE_DIR` (already imported).
+- Produces: two new injectable dependencies, `logVerdict` and the existing `logError`, and
+  an `infra:<cause>:<repo>` sentinel convention in the verdict cache.
+
+- [ ] **Step 1: Write the failing tests**
+
+Add to `tests/cli.test.mjs`. Note the base `deps()` helper needs `logVerdict: () => {}`
+alongside the existing `logError: () => {}`.
+
+```javascript
+  // FINDING 1: a missing manifest is not something an edit can fix. Keying the
+  // block on the code state means every edit mints a new key and blocks again,
+  // forever. 10 of 11 SnowForge repos had no manifest when this was found.
+  it('does not re-block a missing manifest after the code changes', () => {
+    const seen = {};
+    const shared = {
+      loadManifest: () => ({ ok: false, reason: 'missing' }),
+      readVerdict: (_s, k) => seen[k] ?? null,
+      writeVerdict: (_s, k, v) => { seen[k] = v; },
+    };
+    const first = main(input, deps({ ...shared, stateKey: () => 'codeA' }));
+    expect(first.exitCode).toBe(2);
+    // Claude edits something in response; the state key changes.
+    const second = main(input, deps({ ...shared, stateKey: () => 'codeB' }));
+    expect(second.exitCode).toBe(0);
+  });
+
+  it('does not re-block a failed preflight after the code changes', () => {
+    const seen = {};
+    const shared = {
+      getChangedFiles: () => ['src/app/a.tsx', 'src/app/b.tsx'],
+      loadManifest: () => ({
+        ok: true,
+        manifest: {
+          repo: 'SnowPipe',
+          surfaces: { 'src/app/**': { tier: 'browser', run: 'pnpm test:e2e' } },
+          always: null, unverified: {}, ignore: [],
+          budgets: { fast: 120, browser: 360, full: 900 },
+        },
+      }),
+      preflight: () => ({ ok: false, remedy: 'Playwright browsers are missing.' }),
+      readVerdict: (_s, k) => seen[k] ?? null,
+      writeVerdict: (_s, k, v) => { seen[k] = v; },
+      runAll: () => { throw new Error('must not run when preflight blocks'); },
+    };
+    expect(main(input, deps({ ...shared, stateKey: () => 'codeA' })).exitCode).toBe(2);
+    expect(main(input, deps({ ...shared, stateKey: () => 'codeB' })).exitCode).toBe(0);
+  });
+
+  // FINDING 2: the cache being unwritable must not silently disable blocking.
+  it('still blocks when the verdict cannot be recorded', () => {
+    const r = main(input, deps({
+      loadManifest: () => ({ ok: false, reason: 'missing' }),
+      writeVerdict: () => { throw new Error('cache dir unwritable'); },
+    }));
+    expect(r.exitCode).toBe(2);
+    expect(r.stderr).toContain('/verify-init');
+  });
+
+  it('still blocks a failing verification when the verdict cannot be recorded', () => {
+    const r = main(input, deps({
+      runAll: () => ({ verdict: 'fail', failed: 'pnpm test', output: 'boom', seconds: 4 }),
+      writeVerdict: () => { throw new Error('cache dir unwritable'); },
+    }));
+    expect(r.exitCode).toBe(2);
+    expect(r.stderr).toContain('boom');
+  });
+
+  it('logs the write failure rather than swallowing it', () => {
+    const logged = [];
+    main(input, deps({
+      loadManifest: () => ({ ok: false, reason: 'missing' }),
+      writeVerdict: () => { throw new Error('cache dir unwritable'); },
+      logError: (e) => logged.push(e.message),
+    }));
+    expect(logged).toEqual(['cache dir unwritable']);
+  });
+
+  // FINDING 3: a Stop hook cannot surface text on exit 0, so the durable log is
+  // the only place a disclosure actually reaches anyone.
+  it('logs a pass and its disclosures to the verdict log', () => {
+    const lines = [];
+    const r = main(input, deps({
+      loadManifest: () => ({
+        ok: true,
+        manifest: {
+          repo: 'OnDeck',
+          surfaces: { 'src/**': { tier: 'fast', run: 'pnpm test' } },
+          always: null,
+          unverified: { 'src/**': ['expo-share-extension', 'the EAS build'] },
+          ignore: [], budgets: { fast: 120, browser: 360, full: 900 },
+        },
+      }),
+      logVerdict: (line) => lines.push(line),
+    }));
+    expect(r.exitCode).toBe(0);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('pass');
+    expect(lines[0]).toContain('OnDeck');
+    expect(lines[0]).toContain('expo-share-extension');
+    expect(lines[0]).toContain('the EAS build');
+  });
+
+  it('logs a failure verdict too', () => {
+    const lines = [];
+    main(input, deps({
+      runAll: () => ({ verdict: 'fail', failed: 'pnpm test', output: 'boom', seconds: 4 }),
+      logVerdict: (line) => lines.push(line),
+    }));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('fail');
+  });
+
+  it('never lets a verdict-log failure change the outcome', () => {
+    const r = main(input, deps({
+      logVerdict: () => { throw new Error('log unwritable'); },
+    }));
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain('VERIFY PASS');
+  });
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `pnpm test tests/cli.test.mjs`
+Expected: the two re-block tests fail (second call returns 2, not 0); the three
+write-failure tests fail (exit 0, because the throw reaches the outer catch); the log tests
+fail (`logVerdict` is not a dependency yet).
+
+- [ ] **Step 3: Implement**
+
+Add beside `defaultLogError` in `src/cli.mjs`:
+
+```javascript
+/**
+ * The durable record of what verification actually did.
+ *
+ * A `Stop` hook cannot surface text to the operator on exit 0: stdout goes to
+ * the debug log, and `Stop` is not among the events whose stdout is shown.
+ * So the disclosure lines — the whole honesty guarantee — reach nobody unless
+ * they are written somewhere that outlives the session. Their real audience is
+ * whoever reads a "verified" claim weeks later and decides what it was worth.
+ */
+const defaultLogVerdict = (line) => {
+  mkdirSync(CACHE_DIR, { recursive: true });
+  appendFileSync(path.join(CACHE_DIR, 'verify.log'), `${line}\n`, 'utf8');
+};
+
+/** Cache key for a block whose cause no code edit can clear. */
+const infraKey = (cause, repoRoot) => `infra:${cause}:${repoRoot}`;
+```
+
+Add `logVerdict: defaultLogVerdict` to the `d` defaults object.
+
+Add these two helpers inside `main`, after `d` is built:
+
+```javascript
+  // A cache write failing must never change the verdict. Recording is
+  // bookkeeping; blocking is the product.
+  const record = (key, verdict) => {
+    try {
+      d.writeVerdict(hookInput.session_id, key, verdict);
+    } catch (err) {
+      try { d.logError(err); } catch { /* nothing left to do */ }
+    }
+  };
+
+  const note = (repo, tier, verdict, seconds, disclosures = []) => {
+    try {
+      const head = `${new Date().toISOString()}  ${repo}  ${tier}  ${verdict}  ${seconds}s`;
+      const body = disclosures.map((x) => `\n    not covered: ${x}`).join('');
+      d.logVerdict(`${head}${body}`);
+    } catch (err) {
+      try { d.logError(err); } catch { /* nothing left to do */ }
+    }
+  };
+```
+
+Replace every `d.writeVerdict(hookInput.session_id, k, v)` call with `record(k, v)`.
+
+In the manifest-failure branch, before recording and returning:
+
+```javascript
+      const ik = infraKey('manifest', repoRoot);
+      if (d.readVerdict(hookInput.session_id, ik) !== null) return NO_OP;
+      record(ik, 'blocked');
+      record(key, 'blocked');
+      note(manifestRepoName(repoRoot), '-', 'blocked', 0);
+```
+
+where `manifestRepoName` is simply `path.basename(repoRoot)` — the manifest did not load, so
+its `repo` field is unavailable.
+
+In the preflight-failure branch, the same shape with a tier-specific cause:
+
+```javascript
+      const ik = infraKey(`preflight:${plan.tier}`, repoRoot);
+      if (d.readVerdict(hookInput.session_id, ik) !== null) return NO_OP;
+      record(ik, 'blocked');
+      record(key, 'blocked');
+      note(manifest.repo, plan.tier, 'blocked', 0);
+```
+
+Call `note(...)` on the remaining terminal paths: the deferred branch, the pass branch
+(passing `plan.disclosures`), and the fail/blocked branch after `runAll`.
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `pnpm test`
+Expected: every suite green, including the eight new cases.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/cli.mjs tests/cli.test.mjs
+git commit -m "fix: infra blocks re-fired on every edit, and a cache failure disabled blocking"
+```
+
+---
+
 ## Rollback
 
 If the hook proves disruptive, remove the `hooks` key from `C:\Users\alexi\.claude\settings.json` or restore `settings.json.bak-verify-hook`. The dispatcher stays installed and runnable by hand, and every manifest stays valid — nothing else depends on the hook being registered.

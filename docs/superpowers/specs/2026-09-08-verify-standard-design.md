@@ -58,7 +58,13 @@ facts.
 4. **Onboarding skill** — `/verify-init`. Infers a starting manifest from `package.json`
    and the repo layout, then writes it for review.
 5. **Result cache** — `C:\Users\alexi\.claude\verify-cache\{session_id}.json`. Loop
-   protection and re-run avoidance.
+   protection and re-run avoidance. Keyed by code state, plus `infra:<cause>:<repo>`
+   sentinels for blocks whose cause no code edit can clear — a missing manifest or an
+   absent browser stays absent however many times the code changes, so keying those on the
+   code state alone would re-block on every edit forever.
+6. **Verdict log** — `C:\Users\alexi\.claude\verify-cache\verify.log`. Every terminal
+   verdict with its disclosures, appended. This is the only durable record: a `Stop` hook
+   cannot surface text to the operator on exit 0 (§7).
 
 ### Flow
 
@@ -202,8 +208,26 @@ VERIFY PASS  OnDeck  browser (38s)
 
 This is the guard on the Expo-web-as-proxy decision. The run is genuinely useful for
 layout, navigation, and data-binding regressions, and genuinely blind to the native
-surface. The output says so every time, so a pass recorded in `PROGRESS.md` is never
-mistaken later for device verification.
+surface.
+
+**Where that text actually goes, corrected 2026-09-08.** An earlier version of this section
+claimed the hook "prints those lines on every pass." That was wrong. The Claude Code hooks
+contract states that stdout is written to the debug log and not shown, with the exceptions
+being `UserPromptSubmit`, `UserPromptExpansion`, `SessionStart` and `PostModelSwitch`.
+`Stop` is not among them, and stderr on an exit-0 stop is debug-log-only as well.
+`systemMessage` is not documented to be delivered on `Stop` either. So on a passing run
+there is **no channel that surfaces anything to the operator**, and a disclosure written
+only to stdout is theatre.
+
+The disclosure's real audience is later anyway: whoever reads a "verified" claim in
+`PROGRESS.md` or `TODO.md` weeks afterwards and decides how much it was worth. So every
+terminal verdict, with its disclosures, is appended to
+`C:\Users\alexi\.claude\verify-cache\verify.log` — a durable record that outlives the
+session and can be grepped when a claim needs auditing. The block path additionally writes
+its reason to stderr, which is the documented channel for an exit-2 stop.
+
+A pass recorded in `PROGRESS.md` is therefore never mistaken later for device verification,
+because the log says exactly what the run did and did not touch.
 
 **Infrastructure failure is never a pass.** Playwright browsers not installed, emulator not
 booted, dev server port occupied, budget exceeded — all produce `blocked`, which blocks the
