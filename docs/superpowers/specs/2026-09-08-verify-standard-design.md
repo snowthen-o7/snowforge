@@ -39,6 +39,7 @@ facts.
 | OnDeck native iOS | Expo web is the automated proxy | No iOS simulator on Windows 11 and no Mac. Web is the only automatable UI surface. |
 | Honesty requirement | Every pass names what it did *not* cover | Prevents an Expo-web pass from reading as a native pass. |
 | New repos | Fail loud, not silent | An unregistered repo blocks once with onboarding instructions rather than no-opping forever. |
+| Browser tier cadence | Every qualifying stop | Confirmed 2026-09-08. Pre-push is cheaper but lets a broken UI change sit unverified for a whole session. The wall-clock cost is accepted; the `ignore` globs and path routing are what keep it from becoming a tax. |
 
 ## 3. Architecture
 
@@ -296,11 +297,8 @@ Ordered so the riskiest assumption is tested first and nothing is enforced befor
 
 ## 14. Open Questions
 
-1. Should the `browser` tier run on every qualifying stop, or only when the session is about
-   to push? Every stop is safer; pre-push is cheaper. Proposal: every stop during rollout,
-   revisit once real wall-clock numbers exist.
-2. SnowCards ships Android today. If iOS is added, the emulator `full` tier covers only half
+1. SnowCards ships Android today. If iOS is added, the emulator `full` tier covers only half
    the shipped surface and the matrix needs a second row.
-3. What is the real wall-clock cost of the `browser` tier on the slowest repo? The 360s
+2. What is the real wall-clock cost of the `browser` tier on the slowest repo? The 360s
    budget is an estimate, not a measurement. Phase 2 produces the first real number, and
    the budget should be re-set from it rather than left at a guess.
