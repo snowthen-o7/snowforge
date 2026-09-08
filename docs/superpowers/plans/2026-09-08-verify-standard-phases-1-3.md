@@ -1569,6 +1569,7 @@ Expected: FAIL — cannot resolve `../src/cli.mjs`.
 
 ```javascript
 #!/usr/bin/env node
+import { pathToFileURL } from 'node:url';
 import { findRepoRoot, isInScope } from './repo.mjs';
 import { getChangedFiles } from './changes.mjs';
 import { loadManifest } from './manifest.mjs';
@@ -1654,7 +1655,16 @@ export function main(hookInput, deps) {
 }
 
 // Entrypoint: read the hook JSON from stdin, act, exit.
-if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}`) {
+//
+// Use pathToFileURL, never a hand-built `file://` string. On Windows
+// `import.meta.url` is `file:///C:/...` with THREE slashes, while
+// `file://${path}` produces `file://C:/...` with two. They never compare
+// equal, so the guard silently never fires: the hook runs `node cli.mjs`,
+// the module loads, nothing executes, and the process exits 0 — which the
+// harness reads as "do not block". Verification would be silently dead in
+// every repo while every unit test still passed, because the tests call
+// main() directly and never exercise this line.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   let raw = '';
   process.stdin.setEncoding('utf8');
   process.stdin.on('data', (c) => { raw += c; });
@@ -1686,6 +1696,8 @@ echo '{"session_id":"manual","cwd":"C:/Users/alexi/Documents/Diaz/Repositories/S
 ```
 
 Expected: the missing-manifest block, `exit=2`, mentioning `/verify-init`. SnowPipe has no manifest yet, which is exactly the fail-loud path from spec §8.
+
+**This step is the only check that the entrypoint works at all, so do not skip it or treat it as a formality.** Every unit test in this task calls `main()` directly and would still pass if the entrypoint block never executed. If you see `exit=0` with NO output whatsoever, the guard is not matching and the module is loading without running — that is the silent-death failure, not a passing test. Report it rather than moving on.
 
 - [ ] **Step 6: Verify the home-directory guard**
 
