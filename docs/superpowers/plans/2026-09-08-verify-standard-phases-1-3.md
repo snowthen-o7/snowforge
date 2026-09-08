@@ -1331,6 +1331,18 @@ describe('decide', () => {
     expect(decide('fail', 'report')).toEqual({ exitCode: 0, blocking: false });
     expect(decide('blocked', 'report')).toEqual({ exitCode: 0, blocking: false });
   });
+
+  // Fail closed: only an explicit pass may let a session end. A garbled
+  // verdict from an upstream bug must not become a silent "verified".
+  it('blocks an unrecognized verdict in block mode', () => {
+    for (const bad of ['garbage', '', undefined, null, 'PASS', 0]) {
+      expect(decide(bad, 'block')).toEqual({ exitCode: 2, blocking: true });
+    }
+  });
+
+  it('still never blocks an unrecognized verdict in report mode', () => {
+    expect(decide('garbage', 'report')).toEqual({ exitCode: 0, blocking: false });
+  });
 });
 
 describe('formatPass', () => {
@@ -1347,6 +1359,11 @@ describe('formatPass', () => {
     expect(out).toContain('NOT covered by this run:');
     expect(out).toContain('- expo-share-extension');
     expect(out).toContain('- the EAS build');
+  });
+
+  it('does not throw when disclosures is omitted', () => {
+    expect(() => formatPass('SnowPipe', 'fast', 12, undefined)).not.toThrow();
+    expect(formatPass('SnowPipe', 'fast', 12, undefined)).not.toContain('NOT covered');
   });
 });
 
@@ -1379,17 +1396,21 @@ const MAX_OUTPUT = 8000;
 
 export function decide(verdict, mode) {
   if (mode === 'report') return { exitCode: 0, blocking: false };
-  if (verdict === 'fail' || verdict === 'blocked') {
-    return { exitCode: 2, blocking: true };
-  }
-  return { exitCode: 0, blocking: false };
+  // Fail closed. ONLY an explicit pass may let the session end; every other
+  // value blocks, including one this function does not recognise. Listing the
+  // blocking verdicts instead would mean a garbled or undefined verdict from
+  // an upstream bug silently produced a "verified" session — the exact false
+  // claim this tool exists to prevent, arriving through its own gate.
+  if (verdict === 'pass') return { exitCode: 0, blocking: false };
+  return { exitCode: 2, blocking: true };
 }
 
 export function formatPass(repo, tier, seconds, disclosures) {
+  const notes = disclosures ?? [];
   const lines = [`VERIFY PASS  ${repo}  ${tier} (${seconds}s)`];
-  if (disclosures.length) {
+  if (notes.length) {
     lines.push('  NOT covered by this run:');
-    for (const d of disclosures) lines.push(`    - ${d}`);
+    for (const d of notes) lines.push(`    - ${d}`);
   }
   return lines.join('\n');
 }
