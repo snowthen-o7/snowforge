@@ -342,11 +342,16 @@ SnowPipe's manifest stays as the proven reference implementation, not as the pri
    This is the expensive one: `apps/mobile` has no test setup at all, so a harness has to be
    stood up before a fast tier means anything. Budget for that separately rather than
    discovering it mid-task.
-7. **TrueIce** — Playwright already configured, so it should be a near drop-in.
-8. Remaining repos as they become active: SnowFort, SnowGlobe, SnowSite, SnowGen,
-   SnowScrape, SnowTrader, SnowSports, RiftMind. SnowPipe's coverage extends here too when
-   it comes off the backlog.
-9. `/verify-init` skill, then wire `SNOWFORGE_VERIFY_MODE=report` into the autobuild loop.
+7. **SnowFort** — added to the priority list 2026-09-08 on Alex's direction, ahead of
+   TrueIce. Next.js web app in `apps/web`, and it already has a `gate` script
+   (`typecheck && test && lint && build`) plus custom eslint rules with their own vitest
+   config, so the `always` floor can point straight at existing tooling rather than
+   restating it. No Playwright yet, so the browser tier has to be stood up.
+8. **TrueIce** — Playwright already configured, so it should be a near drop-in.
+9. Remaining repos as they become active: SnowGlobe, SnowSite, SnowGen, SnowScrape,
+   SnowTrader, SnowSports, RiftMind. SnowPipe's coverage extends here too when it comes off
+   the backlog.
+10. `/verify-init` skill, then wire `SNOWFORGE_VERIFY_MODE=report` into the autobuild loop.
 
 ## 13. Out of Scope
 
