@@ -144,6 +144,8 @@ tree diff. The dispatcher records a verdict per state key per session:
       "the shipped EAS build itself, TestFlight only"
     ]
   },
+  "browsers": ["chromium"],
+  "authState": "tests/playwright/.clerk/user.json",
   "budgets": { "fast": 120, "browser": 360, "full": 900 },
   "ignore": ["**/*.md", "docs/**", "logs/**", "*.png"]
 }
@@ -161,6 +163,28 @@ tree diff. The dispatcher records a verdict per state key per session:
 - `unverified` — glob to a list of plain-English statements. Printed on every pass whose run
   set touched that glob. This is the honesty mechanism, and is **required** for any surface
   whose `run` is a proxy for the real shipped artifact.
+- `browsers` — which Playwright browsers this repo actually drives, checked on disk by
+  preflight before a browser-tier run. Optional; defaults to `["chromium"]`. Valid names are
+  the ones `playwright install --dry-run` reports: `chromium`, `chromium-headless-shell`,
+  `firefox`, `webkit`. An unknown name is rejected rather than ignored, because a name that
+  matches no dry-run entry would check nothing and let the tier launch unverified.
+
+  **Added 2026-09-08, replacing a hardcoded chromium check.** This is a declared fact rather
+  than something derived from `playwright.config.ts`, and the reason is measured, not
+  stylistic: TrueIce's config declares `firefox` and then carries *commented-out* `chromium`
+  and `webkit` project blocks, so any text parse of that file reports chromium — on the very
+  repo the hardcode was misdiagnosing. Loading the config properly via `playwright test
+  --list` is no better there, because that repo's e2e collection fails in under 5s for
+  unrelated reasons. The drift risk is real and accepted: a repo that adds a browser to its
+  Playwright config and not to its manifest fails at launch instead, which `infrastructure`
+  patterns are there to classify.
+- `authState` — repo-relative path to a Playwright storage-state file the browser tier needs
+  seeded, checked on disk by preflight. Optional; when absent, no such check runs.
+
+  **Added 2026-09-08, replacing a hardcoded `tests/playwright/.clerk/user.json`.** Only
+  SnowPipe has one. Requiring it of every browser-tier repo would have blocked SnowCards and
+  OnDeck — the next two in the rollout — on a Clerk file they have no reason to own, with a
+  remedy that means nothing to them.
 - `budgets` — per-tier seconds. Exceeding one is a `blocked` result, never a pass.
 - `ignore` — never triggers verification. Docs-only sessions cost nothing.
 

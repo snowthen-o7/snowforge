@@ -455,3 +455,70 @@ Opt-out batch: 18/18 repos. 17 placeholders, snowforge-verify a real 2-surface m
   functionally that an opted-out repo with real changes returns exit 0 silently.
   Note: 6 repos gitignore .claude/, so the agent used a path-scoped `git add -f`. Once
   tracked, git follows them regardless of the ignore rule.
+
+## Post-rollout fix 1 — preflight checked the wrong browser, and demanded SnowPipe's Clerk file of everyone
+
+Ruling: TWO hardcoded SnowPipe assumptions in `preflight`, both measured, both fixed
+together on Alex's direction. Task 10's own ruling had already predicted the first one
+("a repo driving firefox or webkit instead would need the matcher widened") and accepted it
+as failing toward a loud block. It came due immediately.
+
+**#1, the browser check.** `defaultChecks.browsersInstalled` matched the chromium entry by
+name and checked that one location. The handoff assumption was that TrueIce — which drives
+firefox — would therefore pass preflight and die at launch, getting reported as a code
+defect. Measured on this host 2026-09-08, the direction is the **opposite**, and worse:
+
+    TrueIce browser-tier preflight -> {ok:false, "Playwright browsers are missing.
+                                       Run: pnpm exec playwright install chromium"}
+
+TrueIce's Playwright resolves chromium to `chromium-1223`, which is not on disk (only
+`chromium-1208` is), while the `firefox-1522` it actually drives *is* installed. So preflight
+false-blocked a repo whose browsers were fine, over a browser it never launches, with a
+remedy that would install something it does not use. Loud rather than silent, as Task 10
+predicted, but still a block on every qualifying stop.
+
+**#2, the auth state.** `preflight` also required `tests/playwright/.clerk/user.json` of
+*every* browser-tier repo. That is SnowPipe's Clerk storage state. Any other repo standing up
+a browser tier gets blocked forever with a remedy that means nothing to it — and SnowCards and
+OnDeck, the next two in the rollout, both reach the browser tier through Expo web.
+
+**Why the browser set is a manifest fact and not derived from playwright.config.ts.** Measured
+before choosing: `TrueIce/playwright.config.ts` declares `firefox` at line 40 and then carries
+commented-out `name: 'chromium'` / `devices['Desktop Chrome']` blocks at lines 46-51. Any text
+parse of that file returns "chromium declared" — the wrong answer, on the exact repo that
+motivated the fix. Loading the config properly with `playwright test --list` is no better
+there: TrueIce's own manifest records that its e2e collection fails in under 5s. So the only
+reliable source is the manifest, which is also what the spec's architecture already says
+(logic central, facts per repo).
+
+Fix: optional `browsers` (default `["chromium"]`, validated against the four names the
+dry-run reports) and optional `authState` (default: no check) in the manifest schema.
+`browsersInstalled` becomes `missingBrowsers(repoRoot, browsers)` returning the missing
+subset, so the remedy names only what is actually absent. `preflight` takes the manifest.
+
+Measured trap while implementing: the dry-run marker sits MID-LINE inside parentheses —
+`Firefox 150.0.2 (playwright firefox v1522)` — so the match must stay unanchored. An
+anchored `startsWith` would have matched nothing and silently checked no browser at all,
+which is the silent-skip class this function exists to prevent. Caught by measuring the real
+output before writing the matcher rather than after.
+
+TDD throughout: 12 tests written first and watched fail. The cli wiring test was verified RED
+by reverting the call site to its two-argument form, confirming it genuinely pins the
+manifest hand-off rather than passing vacuously.
+
+Verified with REAL checks, not injected fakes:
+  TrueIce  browsers=["firefox"]                      -> ok        (was: blocked on chromium)
+  SnowPipe browsers=["chromium"] + authState present -> ok
+  declares webkit (2287 absent, only 2248 on disk)   -> blocked, names webkit only
+  declares firefox+webkit                            -> blocked, names webkit only, not firefox
+  declares firefox + a missing authState             -> blocked, names the declared path
+  all 19 repo manifests                              -> parse, 0 invalid
+  dispatcher against its own changed tree            -> VERIFY PASS snowforge-verify fast (3s)
+140 tests (was 128), tsc clean.
+
+Cost if wrong: a repo that adds a browser to its Playwright config and forgets its manifest
+fails at launch rather than at preflight, which its `infrastructure` patterns classify — the
+same drift any per-repo fact carries, and narrower than false-blocking every non-chromium repo.
+
+Deferred (unchanged from Task 10): `defaultChecks` still has no automated coverage; all
+preflight tests inject fakes, and the real-checks run above covers it for now.
