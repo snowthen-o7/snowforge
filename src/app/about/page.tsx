@@ -7,6 +7,7 @@ import { LandingHeader } from '@/components/landing/LandingHeader'
 import { WhySnowForge } from '@/components/landing/WhySnowForge'
 import { FeaturedApp } from '@/components/landing/FeaturedApp'
 import { AppGrid } from '@/components/landing/AppGrid'
+import { APPS } from '@/components/landing/apps'
 import { Faq } from '@/components/landing/Faq'
 
 export const metadata: Metadata = {
@@ -65,27 +66,15 @@ export default function AboutPage() {
 
           <h2 className="font-display text-2xl text-foreground">What&rsquo;s in the studio</h2>
           <ul>
-            <li>
-              <strong>SnowPipe.</strong> Shopify, Meta, and Google Merchant
-              product feed orchestration with row-level error tracking and
-              live dashboards.
-            </li>
-            <li>
-              <strong>SnowFort.</strong> Fortnite item shop tracker with
-              return notifications by email, SMS, and Discord.
-            </li>
-            <li>
-              <strong>SnowGen.</strong> Content generation for
-              e-commerce product descriptions.
-            </li>
-            <li>
-              <strong>SnowScrape.</strong> Hosted web scraping with schedule,
-              CSS selectors, and webhook delivery.
-            </li>
-            <li>
-              <strong>SnowGlobe.</strong> Internal lead generation and data
-              tooling, used by the rest of SnowForge.
-            </li>
+            {APPS.map((app) => (
+              <li key={app.name}>
+                <strong>
+                  {app.name}
+                  {app.comingSoon ? ' (coming soon)' : app.badge ? ` (${app.badge.toLowerCase()})` : ''}.
+                </strong>{' '}
+                {app.shortDescription}
+              </li>
+            ))}
           </ul>
 
           <h2 className="font-display text-2xl text-foreground">How this works as a business</h2>

@@ -2,6 +2,19 @@ import { APPS, type AppEntry } from './apps'
 import { Monogram } from './Monogram'
 import { SnowDotBackground } from './SnowDotBackground'
 
+const NUMBER_WORDS = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten']
+
+function spell(n: number) {
+  return NUMBER_WORDS[n] ?? String(n)
+}
+
+function toolkitSummary() {
+  const live = APPS.filter((a) => !a.comingSoon).length
+  const soon = APPS.length - live
+  const lead = `${spell(live)} live${soon ? `, ${spell(soon).toLowerCase()} on the way` : ''}.`
+  return `${lead} All of them shipped by hand.`
+}
+
 export function AppGrid() {
   return (
     <section id="toolkit" className="relative overflow-hidden px-6 py-24">
@@ -12,7 +25,7 @@ export function AppGrid() {
             The full toolkit
           </h2>
           <p className="mt-3 text-sm text-ink-dim">
-            Seven tools. One login. All of them shipped by hand.
+            {toolkitSummary()}
           </p>
         </div>
 
@@ -42,6 +55,14 @@ function AppCard({ app }: { app: AppEntry }) {
             {app.comingSoon && (
               <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full bg-muted text-ink-dim">
                 Soon
+              </span>
+            )}
+            {!app.comingSoon && app.badge && (
+              <span
+                className="text-[9px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full"
+                style={{ backgroundColor: `${app.color}26`, color: app.color }}
+              >
+                {app.badge}
               </span>
             )}
           </div>

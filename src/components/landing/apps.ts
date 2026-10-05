@@ -1,6 +1,8 @@
 import {
+  BookmarkCheck,
   Bot,
   Castle,
+  ScanLine,
   Sparkles,
   Swords,
   Trophy,
@@ -18,6 +20,8 @@ export type AppEntry = {
   icon: LucideIcon
   /** Optional flag: renders the card as non-interactive with a "SOON" pill. */
   comingSoon?: boolean
+  /** Optional status pill for a live app, e.g. "Beta". */
+  badge?: string
 }
 
 export const APPS: AppEntry[] = [
@@ -62,5 +66,22 @@ export const APPS: AppEntry[] = [
     url: 'https://sports.snowforge.dev',
     color: '#0ea5e9',
     icon: Trophy,
+  },
+  {
+    name: 'Wait, This Is Cool',
+    shortDescription:
+      "Save the places, events, and things you find, and get reminded before they're gone.",
+    url: 'https://waitthisiscool.com',
+    color: '#10b981',
+    icon: BookmarkCheck,
+    badge: 'Beta',
+  },
+  {
+    name: 'SnowCards',
+    shortDescription: 'Scan your trading cards hands-free, across six games.',
+    url: '',
+    color: '#d946ef',
+    icon: ScanLine,
+    comingSoon: true,
   },
 ]
