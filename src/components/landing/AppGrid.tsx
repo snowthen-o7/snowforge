@@ -59,8 +59,8 @@ function AppCard({ app }: { app: AppEntry }) {
             )}
             {!app.comingSoon && app.badge && (
               <span
-                className="text-[9px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full"
-                style={{ backgroundColor: `${app.color}26`, color: app.color }}
+                className="text-[9px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full text-foreground"
+                style={{ backgroundColor: `${app.color}33` }}
               >
                 {app.badge}
               </span>
