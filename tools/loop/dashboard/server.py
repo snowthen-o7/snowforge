@@ -2,7 +2,7 @@
 
     python tools/loop/dashboard/server.py [--port 8787] [--root <folder with the loop checkouts>]
 
-Binds to 127.0.0.1 only. Reads files; its one write is appending a task line (queue.py).
+Binds to 127.0.0.1 only. Reads files; its one write is appending a task line (taskqueue.py).
 A Monitor thread polls every loop's events.jsonl and the current session's stream once a
 second, keeps a snapshot per loop, and pushes changes to /api/events subscribers (SSE).
 """
@@ -17,6 +17,7 @@ import re
 import sys
 import threading
 import time
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -142,7 +143,7 @@ class Monitor(threading.Thread):
                 chunk = handle.read()
             lines, used = tailing.split_complete(chunk)
             if used:
-                w.stream_offset += used
+                w.stream_offset += used  # advance first: a line that cannot render must not be retried forever
                 stamp = dt.datetime.now().strftime("%H:%M")
                 entries = [e for line in lines for e in tailing.render_line(line, w.loop.path, stamp)]
                 if entries:
@@ -170,13 +171,8 @@ class Monitor(threading.Thread):
         activity = w.last_activity()
         tasks_path = w.loop.path / "TASKS.md"
         q = tasks.parse_queue(tasks_path.read_text(encoding="utf-8", errors="replace")) if tasks_path.is_file() else []
-        if current:
-            try:
-                elapsed = int((now - ev.parse_ts(current["started"])).total_seconds())
-            except (ValueError, TypeError, KeyError):
-                elapsed = None
-            current = dict(current, elapsed_s=elapsed,
-                           turns=sum(1 for e in w.tail if e["kind"] == "said"))
+        if current:  # no elapsed here: it would change the snapshot every poll; the page counts from `started`
+            current = dict(current, turns=sum(1 for e in w.tail if e["kind"] == "said"))
         return {"name": w.loop.name, "path": str(w.loop.path), "branch": w.loop.branch, "warnings": w.loop.warnings,
                 "parse_errors": w.parse_errors, "state": ev.derive_state(w.events, now, activity), "run": run,
                 "current": current, "totals": ev.totals(its, now, run["run"] if run else None), "queue": q,
@@ -232,6 +228,8 @@ class Monitor(threading.Thread):
         except tasks.QueueError as error:
             status = {"invalid": 400, "missing": 404}.get(error.code, 409)
             return status, {"code": error.code, "message": error.message}
+        except Exception as error:  # e.g. PermissionError from os.replace on Windows: still answer the request
+            return 500, {"code": "error", "message": f"{type(error).__name__}: {error}"}
         return 201, out
 
     # --- SSE ---------------------------------------------------------------------------------
@@ -282,7 +280,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/events":
             self._sse()
         elif (m := _ROUTE.match(path)) and m.group(2) != "tasks":
-            name, what = m.group(1), m.group(2)
+            name, what = urllib.parse.unquote(m.group(1)), m.group(2)
             data = {"session": lambda: self.monitor.session(name), "iterations": lambda: self.monitor.iterations(name),
                     "queue": lambda: self.monitor.queue_info(name)}[what]()
             if data is None:
@@ -314,7 +312,7 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             self._json(400, {"code": "invalid", "message": "body must be JSON"})
             return
-        status, out = self.monitor.add_task(m.group(1), body if isinstance(body, dict) else {})
+        status, out = self.monitor.add_task(urllib.parse.unquote(m.group(1)), body if isinstance(body, dict) else {})
         self._json(status, out)
 
     def _sse(self) -> None:

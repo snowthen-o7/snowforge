@@ -65,5 +65,14 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(tail.bootstrap(ALPHA / "nope.jsonl", ALPHA), [])
 
 
+class RobustTests(unittest.TestCase):
+    def test_odd_shapes_do_not_raise(self):
+        for obj in ({"type": "assistant", "message": "nope"},
+                    {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Bash", "input": "ls"}]}},
+                    {"type": "assistant", "message": {"content": "text"}}):
+            out = tail.render_line(line(obj), ALPHA, "")
+            self.assertIsInstance(out, list)
+
+
 if __name__ == "__main__":
     unittest.main()

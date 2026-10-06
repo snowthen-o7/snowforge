@@ -89,6 +89,62 @@ class StateTests(unittest.TestCase):
     def test_empty(self):
         self.assertEqual(events.derive_state([], self.now, None)["state"], "empty")
 
+    def test_stopped_survives_trailing_notice_sent(self):
+        recs = load() + [{"ts": "2026-10-05T23:19:00.000Z", "event": "loop_stopped", "scope": "run", "code": 0, "reason": "the queue is empty"},
+                         {"ts": "2026-10-05T23:19:01.000Z", "event": "notice_sent", "scope": "run"}]
+        s = events.derive_state(recs, self.now, self.now)
+        self.assertEqual((s["state"], s["reason"]), ("stopped", "the queue is empty"))
+
+    def test_notice_from_older_run_does_not_mask_activity(self):
+        recs = [{"ts": "2026-10-05T20:00:00.000Z", "event": "loop_stopped", "scope": "run", "code": 0, "reason": "done"},
+                {"ts": "2026-10-05T20:00:01.000Z", "event": "notice_sent"},
+                {"ts": "2026-10-05T23:00:00.000Z", "event": "iteration_started", "run": "r2", "i": 1},
+                {"ts": "2026-10-05T23:00:01.000Z", "event": "notice_sent"}]
+        self.assertEqual(events.derive_state(recs, self.now, self.now)["state"], "running")
+        self.assertEqual(events.derive_state(recs, self.now, self.now - dt.timedelta(minutes=30))["state"], "stale")
+
+
+class BatchTests(unittest.TestCase):
+    RUN = "20261005-221100"
+
+    def two_batches(self):
+        r = self.RUN
+        return [
+            {"ts": "2026-10-05T22:11:00.000Z", "run": r, "event": "loop_started", "scope": "run", "max_iter": 30},
+            {"ts": "2026-10-05T22:11:00.200Z", "run": r, "event": "loop_started", "scope": "batch", "max_iter": 30},
+            {"ts": "2026-10-05T22:11:01.000Z", "run": r, "event": "iteration_started", "i": 1, "task_id": "T001", "task": "first", "tier": "sonnet", "stream": "s1.jsonl"},
+            {"ts": "2026-10-05T22:20:00.000Z", "run": r, "event": "session_finished", "i": 1, "cost_usd": 1.0, "turns": 5},
+            {"ts": "2026-10-05T22:21:00.000Z", "run": r, "event": "gate_finished", "i": 1, "attempt": 1, "ok": True},
+            {"ts": "2026-10-05T22:21:01.000Z", "run": r, "event": "iteration_finished", "i": 1, "ok": True, "minutes": 10, "commit": "abc"},
+            {"ts": "2026-10-05T22:22:00.000Z", "run": r, "event": "loop_stopped", "scope": "batch", "code": 3},
+            {"ts": "2026-10-05T22:22:01.000Z", "run": r, "event": "usage_limit_sleep", "seconds": 60},
+            {"ts": "2026-10-05T23:00:00.000Z", "run": r, "event": "loop_started", "scope": "batch", "max_iter": 30},
+            {"ts": "2026-10-05T23:00:01.000Z", "run": r, "event": "iteration_started", "i": 1, "task_id": "T002", "task": "second", "tier": "sonnet", "stream": "s2.jsonl"},
+        ]
+
+    def test_batches_do_not_collide(self):
+        its = events.join_iterations(self.two_batches())
+        self.assertEqual(len(its), 2)
+        self.assertEqual([it["batch"] for it in its], [2, 1])
+        self.assertEqual((its[0]["task_id"], its[0]["finished"]), ("T002", None))
+        self.assertEqual((its[1]["task_id"], its[1]["cost"], its[1]["ok"]), ("T001", 1.0, True))
+
+    def test_current_is_batch_two_with_cumulative_ordinal(self):
+        cur = events.current_iteration(self.two_batches())
+        self.assertEqual((cur["task_id"], cur["batch"], cur["i"], cur["ordinal"]), ("T002", 2, 1, 2))
+        self.assertEqual(cur["stream"], "s2.jsonl")
+
+    def test_totals_count_both(self):
+        its = events.join_iterations(self.two_batches())
+        t = events.totals(its, dt.datetime(2026, 10, 5, 23, 30, tzinfo=UTC), self.RUN)
+        self.assertEqual(t["run"]["count"], 2)
+        self.assertAlmostEqual(t["run"]["cost"], 1.0)
+
+    def test_fixture_is_one_batch(self):
+        its = events.join_iterations(load())
+        self.assertEqual(len(its), 3)
+        self.assertEqual({it["batch"] for it in its}, {1})
+
 
 class TotalsTests(unittest.TestCase):
     def test_totals_by_tier(self):

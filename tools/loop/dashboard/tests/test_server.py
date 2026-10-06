@@ -129,8 +129,65 @@ class ServerTests(unittest.TestCase):
                 f.truncate(size)
             self.monitor.poll_once()
 
+    def test_snapshot_is_stable_when_nothing_changes(self):
+        time.sleep(0.5)  # let any pending change settle; poll_s is 0.2 so several polls follow
+        before = self.monitor.watches["Alpha"].snapshot_json
+        self.assertTrue(before)
+        time.sleep(0.7)
+        self.assertEqual(self.monitor.watches["Alpha"].snapshot_json, before)
+        self.assertNotIn("elapsed_s", before)
+
+    def test_add_task_unexpected_error_is_a_500(self):
+        original = srv.tasks.append_task
+        def boom(*args, **kwargs):
+            raise RuntimeError("boom")
+        srv.tasks.append_task = boom
+        try:
+            status, out = self.post("/api/loops/Alpha/tasks", {"sha": "x", "id": "T900", "title": "t", "tier": "sonnet"})
+        finally:
+            srv.tasks.append_task = original
+        self.assertEqual(status, 500); self.assertEqual(out["code"], "error"); self.assertIn("boom", out["message"])
+
     def test_bound_to_localhost_only(self):
         self.assertEqual(self.httpd.server_address[0], "127.0.0.1")
+
+
+class EncodedNameTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.root = Path(cls.tmp.name)
+        for d in ("one", "two"):
+            (cls.root / d / ".loop").mkdir(parents=True)
+            (cls.root / d / ".loop" / "config.sh").write_text('LOOP_NAME="Same"\n', encoding="utf-8")
+        (cls.root / "one" / "TASKS.md").write_text("# TASKS\n\n- [ ] T001 **only task** (Alex). model:sonnet\n", encoding="utf-8")
+        subprocess.run(["git", "init", "-q"], cwd=cls.root / "one", check=True)
+        cls.monitor = srv.Monitor(cls.root, poll_s=0.2, rescan_s=0.5)
+        cls.monitor.start()
+        cls.httpd = srv.make_server(cls.root, 0, cls.monitor)
+        cls.port = cls.httpd.server_address[1]
+        threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.httpd.shutdown(); cls.httpd.server_close(); cls.monitor.stop(); cls.tmp.cleanup()
+
+    def request(self, method, path, obj=None):
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+        c.request(method, path, body=None if obj is None else json.dumps(obj), headers={"Content-Type": "application/json"})
+        r = c.getresponse(); body = r.read(); c.close()
+        return r.status, json.loads(body)
+
+    def test_percent_encoded_names_route(self):
+        self.assertEqual(sorted(self.monitor.watches), ["Same (one)", "Same (two)"])
+        status, info = self.request("GET", "/api/loops/Same%20(one)/queue")
+        self.assertEqual(status, 200); self.assertIn("suggested_id", info)
+        self.assertEqual(self.request("GET", "/api/loops/Same%20(one)/session")[0], 200)
+        self.assertEqual(self.request("GET", "/api/loops/Same%20(one)/iterations")[0], 200)
+        fields = {"sha": info["sha"], "id": info["suggested_id"], "title": "via encoded name", "who": "Alex", "exists": "",
+                  "build": "Build it.", "test": "", "tier": "sonnet"}
+        status, out = self.request("POST", "/api/loops/Same%20(one)/tasks", fields)
+        self.assertEqual(status, 201, out)
 
 
 class IndexTests(unittest.TestCase):

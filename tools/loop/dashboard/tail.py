@@ -59,6 +59,13 @@ def _result_text(content) -> str:
 
 def render_line(line: str, repo: Path, stamp: str) -> list[dict]:
     try:
+        return _render(line, repo, stamp)
+    except Exception:  # one odd line must never stall the tail
+        return []
+
+
+def _render(line: str, repo: Path, stamp: str) -> list[dict]:
+    try:
         obj = json.loads(line)
     except ValueError:
         return []
@@ -85,7 +92,9 @@ def render_line(line: str, repo: Path, stamp: str) -> list[dict]:
     if kind not in {"assistant", "user"}:
         return []
     out: list[dict] = []
-    for block in (obj.get("message") or {}).get("content") or []:
+    message = obj.get("message")
+    content = message.get("content") if isinstance(message, dict) else None
+    for block in content if isinstance(content, list) else []:
         if not isinstance(block, dict):
             continue
         b = block.get("type")
@@ -93,7 +102,7 @@ def render_line(line: str, repo: Path, stamp: str) -> list[dict]:
             out.append(_entry(stamp, "said", str(block["text"]).strip()))
         elif b == "tool_use":
             name = str(block.get("name", "tool"))
-            out.append(_entry(stamp, name, summarize_tool(name, block.get("input") or {}, repo)))
+            out.append(_entry(stamp, name, summarize_tool(name, block["input"] if isinstance(block.get("input"), dict) else {}, repo)))
         elif b == "tool_result":
             out.append(_entry(stamp, "result", _result_text(block.get("content"))))
         elif b == "thinking":
