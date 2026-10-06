@@ -193,5 +193,35 @@ class LoopShTests(unittest.TestCase):
         self.assertIsNone([e for e in r.events() if e["event"] == "session_finished"][0]["cost_usd"])
 
 
+class OvernightTests(unittest.TestCase):
+    def test_run_events_and_dry_notice(self):
+        r = LoopRepo()
+        p = r.run(script="overnight.sh", args=("2", "25"))
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        ev = r.events()
+        self.assertEqual((ev[0]["event"], ev[0]["scope"], ev[0]["mode"], ev[0]["max_iter"]), ("loop_started", "run", "overnight", 2))
+        self.assertEqual((ev[1]["event"], ev[1]["scope"], ev[1]["mode"]), ("loop_started", "batch", "overnight"))
+        self.assertEqual(len({e["run"] for e in ev}), 1)
+        run_stop = [e for e in ev if e["event"] == "loop_stopped" and e["scope"] == "run"]
+        self.assertEqual((run_stop[0]["code"], run_stop[0]["reason"]), (0, "reached 2 iterations"))
+        self.assertEqual(ev[-1]["event"], "notice_sent"); self.assertTrue(ev[-1]["ok"])
+        self.assertIn("[loop] Fake finished: 2 iterations", p.stdout)  # notify.py --dry-run prints the subject
+
+    def test_usage_limit_sleeps_then_relaunches(self):
+        r = LoopRepo()
+        p = r.run(script="overnight.sh", args=("1", "25"), seq=["usage-limit.jsonl", "success.jsonl"])
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        ev = r.events()
+        kinds = [e["event"] + ("/" + e["scope"] if "scope" in e else "") for e in ev]
+        self.assertEqual(kinds, ["loop_started/run", "loop_started/batch", "iteration_started", "session_finished",
+                                 "loop_stopped/batch", "usage_limit_sleep", "loop_started/batch", "iteration_started",
+                                 "session_finished", "gate_finished", "iteration_finished", "loop_stopped/batch",
+                                 "loop_stopped/run", "notice_sent"])
+        sleep = ev[5]
+        self.assertGreater(sleep["seconds"], 0)
+        self.assertRegex(sleep["until"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+        self.assertIn("session limit", sleep["message"])
+
+
 if __name__ == "__main__":
     unittest.main()
