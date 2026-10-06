@@ -138,7 +138,7 @@ for i in $(seq 1 "$MAX_ITER"); do
   task_line=$(grep -m1 '^- \[ \]' TASKS.md)
   tier=$(task_tag); tier="${tier:-$DEFAULT_TIER}"
   emit iteration_started "i=$i" "task_id=$(printf '%s' "$task_line" | sed -E 's/^- \[ \] *([^ ]+).*/\1/')" \
-    "task=$(printf '%s' "$task_line" | sed -E 's/^- \[ \] *//; s/\*\*//g' | cut -c1-200)" \
+    "task=$(printf '%s' "$task_line" | sed -E 's/^- \[ \] *//; s/\*\*//g')" \
     "model=$MODEL" "tier=$tier" "stream=$LOG_DIR/iter-$i-$ts.jsonl"
   claude -p "$PROMPT" \
     --model "$MODEL" \
@@ -153,10 +153,10 @@ for i in $(seq 1 "$MAX_ITER"); do
 
   # An API error or an expired login does no work (RiftMind burned 25 iterations on one, 2026-09-20).
   if [[ "$cost" == *is_error* ]]; then
-    echo "API ERROR — $(head -c 300 "$LOG_DIR/iter-$i-$ts.log")"; stop 4 "API error"
+    echo "API ERROR — $(head -c 300 "$LOG_DIR/iter-$i-$ts.log")"; finish_iter false; stop 4 "API error"
   fi
   if grep -qE "hit your (session|weekly) limit" "$LOG_DIR/iter-$i-$ts.log"; then
-    echo "USAGE LIMIT — $(grep -m1 -E 'hit your (session|weekly) limit' "$LOG_DIR/iter-$i-$ts.log")"; stop 3 "usage limit"
+    echo "USAGE LIMIT — $(grep -m1 -E 'hit your (session|weekly) limit' "$LOG_DIR/iter-$i-$ts.log")"; finish_iter false; stop 3 "usage limit"
   fi
 
   # The independent gate: never trust the session's own "all green". Retried once after a minute

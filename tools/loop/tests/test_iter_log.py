@@ -24,6 +24,11 @@ class ParseStreamTests(unittest.TestCase):
         result, _ = iter_log.parse_stream(raw)
         self.assertIsNone(result)
 
+    def test_unterminated_result_line_is_parsed(self):
+        raw = (STREAMS / "success.jsonl").read_text(encoding="utf-8").rstrip("\n")
+        result, _ = iter_log.parse_stream(raw)
+        self.assertEqual(result["total_cost_usd"], 2.41)
+
     def test_old_single_object_format(self):
         raw = json.dumps({"type": "result", "total_cost_usd": 1.5, "num_turns": 3, "duration_ms": 60000, "result": "ok"})
         result, text = iter_log.parse_stream(raw)

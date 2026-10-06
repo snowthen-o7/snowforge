@@ -165,12 +165,16 @@ class LoopShTests(unittest.TestCase):
         ev = r.events()
         self.assertTrue([e for e in ev if e["event"] == "session_finished"][0]["usage_limit"])
         self.assertEqual((ev[-1]["event"], ev[-1]["code"]), ("loop_stopped", 3))
+        self.assertEqual((ev[-2]["event"], ev[-2]["ok"]), ("iteration_finished", False))
+        self.assertNotIn("took", p.stdout)  # a failed iteration prints no closing line
 
     def test_api_error(self):
         r = LoopRepo()
         p = r.run(stream="api-error.jsonl")
         self.assertEqual(p.returncode, 4, p.stdout + p.stderr)
-        self.assertEqual(r.events()[-1]["code"], 4)
+        ev = r.events()
+        self.assertEqual(ev[-1]["code"], 4)
+        self.assertEqual((ev[-2]["event"], ev[-2]["ok"]), ("iteration_finished", False))
 
     def test_blocked(self):
         r = LoopRepo()
@@ -214,10 +218,10 @@ class OvernightTests(unittest.TestCase):
         ev = r.events()
         kinds = [e["event"] + ("/" + e["scope"] if "scope" in e else "") for e in ev]
         self.assertEqual(kinds, ["loop_started/run", "loop_started/batch", "iteration_started", "session_finished",
-                                 "loop_stopped/batch", "usage_limit_sleep", "loop_started/batch", "iteration_started",
+                                 "iteration_finished", "loop_stopped/batch", "usage_limit_sleep", "loop_started/batch", "iteration_started",
                                  "session_finished", "gate_finished", "iteration_finished", "loop_stopped/batch",
                                  "loop_stopped/run", "notice_sent"])
-        sleep = ev[5]
+        sleep = ev[6]
         self.assertGreater(sleep["seconds"], 0)
         self.assertRegex(sleep["until"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
         self.assertIn("session limit", sleep["message"])

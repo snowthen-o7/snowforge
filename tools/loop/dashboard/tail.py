@@ -110,11 +110,16 @@ def _render(line: str, repo: Path, stamp: str) -> list[dict]:
     return out
 
 
-def bootstrap(path: Path, repo: Path, limit: int = 300) -> list[dict]:
+def bootstrap_with_offset(path: Path, repo: Path, limit: int = 300) -> tuple[list[dict], int]:
+    """The last `limit` entries of a stream and how many bytes were consumed (the offset to resume at)."""
     if not path.is_file():
-        return []
-    lines, _ = split_complete(path.read_bytes())
+        return [], 0
+    lines, used = split_complete(path.read_bytes())
     entries: list[dict] = []
     for line in lines:
         entries.extend(render_line(line, repo, ""))
-    return entries[-limit:]
+    return entries[-limit:], used
+
+
+def bootstrap(path: Path, repo: Path, limit: int = 300) -> list[dict]:
+    return bootstrap_with_offset(path, repo, limit)[0]

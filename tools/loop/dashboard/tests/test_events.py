@@ -63,6 +63,61 @@ class IterationTests(unittest.TestCase):
         self.assertEqual((s["run"], s["mode"], s["max_iter"], s["branch"]), ("20261005-221100", "overnight", 30, "main"))
 
 
+class AbortedTests(unittest.TestCase):
+    RUN = "r1"
+
+    def aborted(self):
+        r = self.RUN
+        return [
+            {"ts": "2026-10-05T22:11:00.200Z", "run": r, "event": "loop_started", "scope": "batch"},
+            {"ts": "2026-10-05T22:11:01.000Z", "run": r, "event": "iteration_started", "i": 1, "task_id": "T001", "task": "t", "tier": "sonnet", "stream": "s.jsonl"},
+            {"ts": "2026-10-05T22:20:00.000Z", "run": r, "event": "session_finished", "i": 1, "cost_usd": 1.0, "usage_limit": True},
+            {"ts": "2026-10-05T22:20:01.000Z", "run": r, "event": "loop_stopped", "scope": "batch", "code": 3, "reason": "usage limit"},
+        ]
+
+    def test_batch_stop_closes_open_iteration(self):
+        recs = self.aborted()
+        self.assertIsNone(events.current_iteration(recs))
+        it = events.join_iterations(recs)[0]
+        self.assertIs(it["aborted"], True); self.assertIs(it["ok"], False)
+        self.assertEqual(it["finished"], "2026-10-05T22:20:01.000Z")
+
+    def test_finished_iteration_is_not_aborted(self):
+        recs = self.aborted()
+        recs.insert(3, {"ts": "2026-10-05T22:20:00.500Z", "run": self.RUN, "event": "iteration_finished", "i": 1, "ok": False})
+        it = events.join_iterations(recs)[0]
+        self.assertIs(it["aborted"], False); self.assertEqual(it["finished"], "2026-10-05T22:20:00.500Z")
+
+    def test_stop_of_one_batch_leaves_the_next_running(self):
+        recs = self.aborted() + [
+            {"ts": "2026-10-05T23:00:00.000Z", "run": self.RUN, "event": "loop_started", "scope": "batch"},
+            {"ts": "2026-10-05T23:00:01.000Z", "run": self.RUN, "event": "iteration_started", "i": 1, "task_id": "T002", "stream": "s2.jsonl"}]
+        self.assertEqual(events.current_iteration(recs)["task_id"], "T002")
+        self.assertIs(events.join_iterations(recs)[0]["aborted"], False)
+
+    def test_page_shows_aborted(self):
+        html = (Path(events.__file__).parent / "index.html").read_text(encoding="utf-8")
+        self.assertIn("if (it.aborted) return {c: 'bad', t: 'aborted'};", html)
+        self.assertLess(html.index("it.aborted) return"), html.index("if (!it.finished)"))
+
+
+class RobustDataTests(unittest.TestCase):
+    def test_non_numeric_cost_counts_as_zero(self):
+        recs = [{"ts": "2026-10-05T22:11:01.000Z", "run": "r", "event": "iteration_started", "i": 1},
+                {"ts": "2026-10-05T22:12:00.000Z", "run": "r", "event": "session_finished", "i": 1, "cost_usd": "lots"}]
+        self.assertEqual(events.join_iterations(recs)[0]["cost"], 0.0)
+
+    def test_totals_skip_unparseable_start(self):
+        its = events.join_iterations([{"ts": "bad", "run": "r", "event": "iteration_started", "i": 1}])
+        t = events.totals(its, dt.datetime(2026, 10, 5, tzinfo=UTC), "r")
+        self.assertEqual(t["run"]["count"], 0)
+
+    def test_long_task_is_clipped_to_200(self):
+        recs = [{"ts": "2026-10-05T22:11:01.000Z", "run": "r", "event": "iteration_started", "i": 1, "task": "é" * 300, "stream": "s"}]
+        self.assertEqual(len(events.join_iterations(recs)[0]["task"]), 200)
+        self.assertEqual(len(events.current_iteration(recs)["task"]), 200)
+
+
 class StateTests(unittest.TestCase):
     now = dt.datetime(2026, 10, 5, 23, 20, tzinfo=UTC)
 

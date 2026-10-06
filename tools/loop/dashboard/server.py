@@ -52,11 +52,20 @@ class Watch:
         return self.loop.log_dir / "events.jsonl"
 
     def last_activity(self) -> dt.datetime | None:
-        candidates = [self.events_path(), self.stream]
-        gates = sorted(self.loop.log_dir.glob("gate-*.log*"), key=lambda p: p.stat().st_mtime if p.exists() else 0)
-        if gates:
-            candidates.append(gates[-1])
-        times = [p.stat().st_mtime for p in candidates if p is not None and p.exists()]
+        candidates: list[Path | None] = [self.events_path(), self.stream]
+        gate = next((e for e in reversed(self.events) if e.get("event") == "gate_finished" and e.get("log")), None)
+        if gate:  # the running gate's output: the last gate_finished names the log (and its retry / opus siblings)
+            base = str(gate["log"])
+            path = self.loop.path / base
+            candidates += [path, Path(f"{path}.retry"), Path(f"{path}.opus")]
+        times = []
+        for p in candidates:
+            if p is None:
+                continue
+            try:
+                times.append(p.stat().st_mtime)
+            except OSError:  # missing, or gone between the listing and the stat
+                continue
         return dt.datetime.fromtimestamp(max(times), ev.UTC) if times else None
 
 
@@ -132,10 +141,7 @@ class Monitor(threading.Thread):
             w.stream, w.stream_offset = wanted, 0
             w.tail = []
             if wanted and wanted.is_file():
-                lines, used = tailing.split_complete(wanted.read_bytes())
-                w.stream_offset = used
-                rendered = [e for line in lines for e in tailing.render_line(line, w.loop.path, "")]
-                w.tail = rendered[-TAIL_LIMIT:]
+                w.tail, w.stream_offset = tailing.bootstrap_with_offset(wanted, w.loop.path, TAIL_LIMIT)
             self.publish("session", {"name": w.loop.name, "reset": True, "entries": w.tail})
         elif w.stream and w.stream.exists():
             with w.stream.open("rb") as handle:
@@ -156,9 +162,13 @@ class Monitor(threading.Thread):
             self.publish("loop", snap)
 
     def _stream_for(self, w: Watch, current: dict | None) -> Path | None:
-        if not current or not current.get("stream"):
+        stream = current.get("stream") if current else None
+        if not stream:  # nothing running: keep showing the most recent iteration's session ("Last session")
+            its = ev.join_iterations(w.events)
+            stream = its[0].get("stream") if its else None
+        if not stream:
             return None
-        base = w.loop.path / current["stream"]
+        base = w.loop.path / stream
         opus = base.with_name(base.stem + "-opus.jsonl")
         if opus.exists() and (not base.exists() or opus.stat().st_mtime >= base.stat().st_mtime):
             return opus
@@ -192,13 +202,27 @@ class Monitor(threading.Thread):
         with self.lock:
             return self.watches.get(name)
 
+    def _snapshot_or_error(self, w: Watch) -> dict:
+        """The watch's published snapshot, or one computed now; a failure there must not drop the HTTP reply."""
+        if w.snapshot:
+            return w.snapshot
+        try:
+            return self._snapshot(w, ev.current_iteration(w.events))
+        except Exception as error:
+            now = dt.datetime.now(ev.UTC)
+            return {"name": w.loop.name, "path": str(w.loop.path), "branch": w.loop.branch,
+                    "warnings": list(w.loop.warnings) + [f"poll error: {type(error).__name__}: {error}"],
+                    "parse_errors": w.parse_errors, "state": {"state": "error", "reason": str(error), "until": None},
+                    "run": None, "current": None, "totals": ev.totals([], now, None), "queue": [],
+                    "last_activity": None, "iterations_count": 0, "recent": []}
+
     def snapshots(self) -> list[dict]:
         with self.lock:
-            return [w.snapshot or self._snapshot(w, ev.current_iteration(w.events)) for w in self.watches.values()]
+            return [self._snapshot_or_error(w) for w in self.watches.values()]
 
     def snapshot(self, name: str) -> dict | None:
         w = self._watch(name)
-        return None if w is None else (w.snapshot or self._snapshot(w, ev.current_iteration(w.events)))
+        return None if w is None else self._snapshot_or_error(w)
 
     def session(self, name: str) -> list[dict] | None:
         w = self._watch(name)
@@ -206,7 +230,12 @@ class Monitor(threading.Thread):
 
     def iterations(self, name: str) -> list[dict] | None:
         w = self._watch(name)
-        return None if w is None else ev.join_iterations(w.events)
+        if w is None:
+            return None
+        try:
+            return ev.join_iterations(w.events)
+        except Exception:
+            return []
 
     def queue_info(self, name: str) -> dict | None:
         w = self._watch(name)
@@ -249,8 +278,17 @@ class Monitor(threading.Thread):
         for q in list(self.subscribers):
             try:
                 q.put_nowait((kind, payload))
-            except queue_mod.Full:
-                pass
+            except queue_mod.Full:  # a subscriber that stopped reading: drop it and tell its handler to hang up, so
+                try:  # the browser's EventSource reconnects and re-fetches what it missed (no self.lock: rescan publishes under it)
+                    self.subscribers.remove(q)
+                except ValueError:
+                    pass
+                try:
+                    while not q.empty():
+                        q.get_nowait()
+                    q.put_nowait(("close", ""))
+                except (queue_mod.Empty, queue_mod.Full):
+                    pass
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -332,6 +370,8 @@ class Handler(BaseHTTPRequestHandler):
                     self.wfile.write(b": keepalive\n\n")
                     self.wfile.flush()
                     continue
+                if kind == "close":
+                    return
                 self.wfile.write(f"event: {kind}\ndata: {payload}\n\n".encode("utf-8"))
                 self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):

@@ -99,8 +99,6 @@ def is_staged(repo: Path) -> bool:
         if out.returncode != 0:
             raise QueueError("git", f"could not check the git index: {out.stderr[:200]}")
         return bool(out.stdout.strip())
-    except subprocess.CalledProcessError as e:
-        raise QueueError("git", f"could not check the git index: {e.stderr[:200] if e.stderr else str(e)[:200]}")
     except (OSError, subprocess.TimeoutExpired) as e:
         raise QueueError("git", f"could not check the git index: {str(e)[:200]}")
 
@@ -141,8 +139,9 @@ def append_task(repo: Path, fields: dict, expected_sha: str) -> dict:
     ident = line.split()[3]
 
     # Check for duplicates in both files
-    existing = {m.group(1) for f in (path, repo / "TASKS-archive.md") if f.is_file()
-                for l in f.read_text(encoding="utf-8", errors="replace").splitlines() if (m := _ANY.match(l))}
+    archive = repo / "TASKS-archive.md"
+    archive_text = archive.read_text(encoding="utf-8", errors="replace") if archive.is_file() else ""
+    existing = {m.group(1) for l in text.splitlines() + archive_text.splitlines() if (m := _ANY.match(l))}
     if ident in existing:
         raise QueueError("duplicate", f"{ident} is already in TASKS.md or TASKS-archive.md")
 

@@ -54,11 +54,26 @@ def _batched(events: list[dict]):
         yield batches.get(run, 0), e
 
 
+def _num(value: object) -> float:
+    """A cost field as a float; anything that is not a number counts as 0.0."""
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0.0
+
+
+def _task_text(value: object) -> str | None:
+    return None if value is None else str(value)[:200]
+
+
 def join_iterations(events: list[dict]) -> list[dict]:
     its: dict[tuple, dict] = {}
     order: list[tuple] = []
     for batch, e in _batched(events):
         kind = e.get("event")
+        if kind == "loop_stopped" and e.get("scope") == "batch":
+            # The batch is over: an iteration of it still open was cut off (usage limit, API error, a killed loop).
+            for k in order:
+                if k[:2] == (e.get("run", ""), batch) and its[k]["finished"] is None:
+                    its[k].update(finished=e.get("ts"), ok=False, aborted=True)
+            continue
         if kind not in {"iteration_started", "session_finished", "gate_finished", "iteration_finished"}:
             continue
         k = (e.get("run", ""), batch, e.get("i"))
@@ -66,11 +81,11 @@ def join_iterations(events: list[dict]) -> list[dict]:
             its[k] = {"run": e.get("run", ""), "batch": batch, "i": e.get("i"), "task_id": None, "task": None, "model": None,
                       "tier": None, "started": None, "stream": None, "cost_usd": None, "opus_cost_usd": None, "turns": None,
                       "duration_ms": None, "is_error": False, "usage_limit": False, "gates": [], "ok": None,
-                      "minutes": None, "commit": None, "finished": None}
+                      "minutes": None, "commit": None, "finished": None, "aborted": False}
             order.append(k)
         it = its[k]
         if kind == "iteration_started":
-            it.update(task_id=e.get("task_id"), task=e.get("task"), model=e.get("model"), tier=e.get("tier"),
+            it.update(task_id=e.get("task_id"), task=_task_text(e.get("task")), model=e.get("model"), tier=e.get("tier"),
                       started=e.get("ts"), stream=e.get("stream"))
         elif kind == "session_finished":
             if e.get("attempt") == "opus":
@@ -85,7 +100,7 @@ def join_iterations(events: list[dict]) -> list[dict]:
     out = []
     for k in reversed(order):
         it = its[k]
-        it["cost"] = float(it["cost_usd"] or 0.0) + float(it["opus_cost_usd"] or 0.0)
+        it["cost"] = _num(it["cost_usd"]) + _num(it["opus_cost_usd"])
         out.append(it)
     return out
 
@@ -105,6 +120,8 @@ def current_iteration(events: list[dict]) -> dict | None:
         return None
     phase = "session"
     for batch, e in tagged:
+        if e.get("event") == "loop_stopped" and e.get("scope") == "batch" and (e.get("run", ""), batch) == last_key[:2]:
+            return None  # the batch ended with this iteration still open: it was aborted
         if (e.get("run", ""), batch, e.get("i")) != last_key:
             continue
         kind = e.get("event")
@@ -115,7 +132,7 @@ def current_iteration(events: list[dict]) -> dict | None:
         elif kind == "gate_finished" and not e.get("ok"):
             phase = "gate retry" if e.get("attempt") == 1 else ("opus session" if e.get("attempt") == "retry" else phase)
     return {"run": last.get("run", ""), "batch": last_key[1], "i": last.get("i"), "ordinal": ordinal,
-            "task_id": last.get("task_id"), "task": last.get("task"),
+            "task_id": last.get("task_id"), "task": _task_text(last.get("task")),
             "model": last.get("model"), "tier": last.get("tier"), "started": last.get("ts"),
             "stream": last.get("stream"), "phase": phase}
 
@@ -176,7 +193,10 @@ def totals(iterations: list[dict], now: dt.datetime, run: str | None) -> dict:
     for it in iterations:
         if not it.get("started"):
             continue
-        started = parse_ts(it["started"])
+        try:
+            started = parse_ts(it["started"])
+        except (ValueError, TypeError, AttributeError):
+            continue
         if run and it["run"] == run:
             _add(out["run"], it)
         if started.astimezone().date() == local_day:

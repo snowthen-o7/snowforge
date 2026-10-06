@@ -65,6 +65,15 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(tail.bootstrap(ALPHA / "nope.jsonl", ALPHA), [])
 
 
+class BootstrapOffsetTests(unittest.TestCase):
+    def test_offset_is_the_consumed_bytes(self):
+        entries, used = tail.bootstrap_with_offset(STREAM, ALPHA)
+        self.assertEqual(used, STREAM.stat().st_size)
+        self.assertEqual(used, tail.split_complete(STREAM.read_bytes())[1])
+        self.assertEqual(entries, tail.bootstrap(STREAM, ALPHA))
+        self.assertEqual(tail.bootstrap_with_offset(ALPHA / "nope.jsonl", ALPHA), ([], 0))
+
+
 class RobustTests(unittest.TestCase):
     def test_odd_shapes_do_not_raise(self):
         for obj in ({"type": "assistant", "message": "nope"},

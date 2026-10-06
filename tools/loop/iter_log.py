@@ -7,7 +7,7 @@ or, with no result line, the assistant's text blocks) followed by whatever the n
 wrote to stderr, so everything that read the old text log (the usage-limit grep in loop.sh, a
 person) reads the same, and prints one line, `cost: $2.41, 38 turns, 21 min`, that loop.sh
 echoes into the batch log. A stream without a result line (a session killed mid-run) says
-`cost: unknown (no result line)`. A partial last line (still being written) is ignored.
+`cost: unknown (no result line)`. A last line without a newline is parsed too (a result written right before a kill); one cut mid-object fails to parse and is skipped.
 
 Usage:
   python iter_log.py <stream.jsonl> <stderr.txt> <log>     write the log, print the cost line
@@ -29,8 +29,6 @@ def parse_stream(raw: str) -> tuple[dict | None, list[str]]:
     result = None
     text: list[str] = []
     lines = raw.split("\n")
-    if raw and not raw.endswith("\n"):
-        lines = lines[:-1]  # a partial last line is not finished being written
     for line in lines:
         line = line.strip()
         if not line:

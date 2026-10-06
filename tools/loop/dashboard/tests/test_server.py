@@ -122,12 +122,81 @@ class ServerTests(unittest.TestCase):
             status, _, body = self.get("/api/loops")
             self.assertEqual(status, 200)
             alpha = next(l for l in json.loads(body)["loops"] if l["name"] == "Alpha")
+            # totals now skips an iteration whose start does not parse, so the loop stays served without a warning
             self.assertTrue(any(w.startswith("poll error:") for w in alpha["warnings"])
-                            or (alpha["current"] is not None and alpha["current"]["elapsed_s"] is None))
+                            or (alpha["current"] is not None and alpha["current"]["i"] == 99))
         finally:
             with ev_path.open("r+b") as f:
                 f.truncate(size)
             self.monitor.poll_once()
+
+    def test_bad_event_data_does_not_blank_the_board(self):
+        ev_path = self.root / "alpha" / "logs" / "loop" / "events.jsonl"
+        size = ev_path.stat().st_size
+        try:
+            with ev_path.open("a", encoding="utf-8", newline="\n") as f:
+                f.write(json.dumps({"ts": "bad", "loop": "Alpha", "run": "20261005-221100", "event": "iteration_started", "scope": "iteration", "i": 98}) + "\n")
+                f.write(json.dumps({"ts": "2026-10-05T23:14:00.000Z", "loop": "Alpha", "run": "20261005-221100", "event": "session_finished", "i": 98, "cost_usd": "lots"}) + "\n")
+            self.monitor.poll_once()
+            status, _, body = self.get("/api/loops")
+            self.assertEqual(status, 200)
+            self.assertEqual({l["name"] for l in json.loads(body)["loops"]}, {"Alpha", "beta"})
+            self.assertEqual(self.get("/api/loops/Alpha/iterations")[0], 200)
+        finally:
+            with ev_path.open("r+b") as f:
+                f.truncate(size)
+            self.monitor.poll_once()
+
+    def test_handler_fallbacks_survive_exceptions(self):
+        w = self.monitor.watches["beta"]
+        saved, original = w.snapshot, srv.ev.join_iterations
+        def boom(*args, **kwargs):
+            raise RuntimeError("kaboom")
+        w.snapshot = None
+        srv.ev.join_iterations = boom
+        try:
+            status, _, body = self.get("/api/loops")
+            self.assertEqual(status, 200)
+            beta = next(l for l in json.loads(body)["loops"] if l["name"] == "beta")
+            self.assertEqual(beta["state"]["state"], "error"); self.assertIn("kaboom", beta["state"]["reason"])
+            self.assertTrue(any(x.startswith("poll error") for x in beta["warnings"]))
+            status, _, body = self.get("/api/loops/Alpha/iterations")
+            self.assertEqual((status, json.loads(body)["iterations"]), (200, []))
+        finally:
+            srv.ev.join_iterations = original
+            w.snapshot = saved
+
+    def test_tail_stays_after_the_iteration_finishes(self):
+        ev_path = self.root / "alpha" / "logs" / "loop" / "events.jsonl"
+        size = ev_path.stat().st_size
+        try:
+            with ev_path.open("a", encoding="utf-8", newline="\n") as f:
+                f.write(json.dumps({"ts": "2026-10-05T23:15:00.000Z", "loop": "Alpha", "run": "20261005-221100", "event": "iteration_finished", "i": 3, "ok": True, "minutes": 2}) + "\n")
+            self.monitor.poll_once()
+            self.assertIsNone(srv.ev.current_iteration(self.monitor.watches["Alpha"].events))
+            status, _, body = self.get("/api/loops/Alpha/session")
+            self.assertEqual(status, 200)
+            self.assertEqual(len([e for e in json.loads(body)["entries"] if not e["hidden"]]), 7)
+        finally:
+            with ev_path.open("r+b") as f:
+                f.truncate(size)
+            self.monitor.poll_once()
+
+    def test_last_activity_none_without_files(self):
+        self.assertIsNone(self.monitor.watches["beta"].last_activity())
+
+    def test_slow_subscriber_is_dropped_with_a_close_marker(self):
+        q = self.monitor.subscribe()
+        try:
+            for n in range(1001):
+                self.monitor.publish("session", {"n": n})
+            self.assertNotIn(q, self.monitor.subscribers)
+            last = None
+            while not q.empty():
+                last = q.get_nowait()
+            self.assertEqual(last, ("close", ""))
+        finally:
+            self.monitor.unsubscribe(q)
 
     def test_snapshot_is_stable_when_nothing_changes(self):
         time.sleep(0.5)  # let any pending change settle; poll_s is 0.2 so several polls follow

@@ -38,7 +38,7 @@ main{max-width:1440px;margin:0 auto;padding:16px;display:flex;flex-direction:col
 .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;padding:2px 10px;border-radius:999px;white-space:nowrap}
 .pill i{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
 .pill.running{background:var(--run-bg);color:var(--run-fg)}.pill.sleeping,.pill.stale{background:var(--warn-bg);color:var(--warn-fg)}
-.pill.run{background:var(--run-bg);color:var(--run-fg)}.pill.stopped{background:var(--bad-bg);color:var(--bad-fg)}.pill.empty{background:var(--chip);color:var(--dim)}
+.pill.run{background:var(--run-bg);color:var(--run-fg)}.pill.stopped,.pill.error{background:var(--bad-bg);color:var(--bad-fg)}.pill.empty{background:var(--chip);color:var(--dim)}
 .pill.ok{background:var(--ok-bg);color:var(--ok-fg)}.pill.warn{background:var(--warn-bg);color:var(--warn-fg)}.pill.bad{background:var(--bad-bg);color:var(--bad-fg)}
 .chip{font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:5px;padding:1px 7px}
 .marks{display:flex;gap:4px}.marks span{width:22px;height:10px;border-radius:3px;background:var(--chip)}
@@ -141,6 +141,7 @@ form.task input,form.task select,form.task textarea{border:1px solid var(--line)
   const stateLabel = (st) => st.state === 'stopped' ? 'stopped: ' + st.reason : st.state === 'sleeping' ? 'sleeping until ' + hhmm(st.until) : st.state;
   const gateOf = (it) => {
     const g = it.gates || [];
+    if (it.aborted) return {c: 'bad', t: 'aborted'};
     if (!it.finished) return it.cost_usd == null ? {c: 'run', t: 'session running'} : {c: 'run', t: 'gate running'};
     if (!it.ok) return {c: 'bad', t: 'failed'};
     const last = g[g.length - 1];
@@ -209,7 +210,7 @@ form.task input,form.task select,form.task textarea{border:1px solid var(--line)
       + `<div style="grid-column:1/-1"><div class="k">By tier, 7 days</div><div class="bar">${tiers.map(([t, v], i) => `<span title="${esc(t)} ${money(v.cost)}" style="flex:0 0 ${week.cost ? (100 * v.cost / week.cost).toFixed(1) : 0}%;background:${shades[i % 4]}"></span>`).join('')}</div><div class="sub" style="margin-top:4px">${tiers.map(([t, v]) => `${esc(t)} ${money(v.cost)}`).join(' · ')}</div></div>`;
     $('warnings').textContent = l.warnings.join(' · ') + (l.parse_errors ? ` · ${l.parse_errors} unreadable event line(s) skipped` : '');
     const name = selected;
-    const iterKey = `${name}|${l.iterations_count}|${cur ? cur.i : ''}|${cur ? cur.batch : ''}`;
+    const iterKey = `${name}|${l.iterations_count}|${cur ? cur.i : ''}|${cur ? cur.batch : ''}|${l.current?.phase ?? ''}|${l.recent?.[0]?.gates?.length ?? 0}`;
     if (iterKey === lastIterKey) return;  // the snapshot changed in some other way: the table is still right
     lastIterKey = iterKey;
     fetch(`/api/loops/${encodeURIComponent(name)}/iterations`).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); }).then((d) => {
@@ -222,6 +223,14 @@ form.task input,form.task select,form.task textarea{border:1px solid var(--line)
 
   function render() { if (selected) renderDetail(); else renderBoard(); }
 
+  function refetchSession(clearOnError) {  // replace the tail with the server's copy; ignore a reply for a loop no longer selected
+    if (!selected) return;
+    const name = selected;
+    fetch(`/api/loops/${encodeURIComponent(name)}/session`).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
+      .then((d) => { if (selected !== name) return; tail = d.entries || []; pending = []; renderTail(); })
+      .catch(() => { if (selected !== name || !clearOnError) return; tail = []; renderTail('could not load the session'); });
+  }
+
   function route() {
     let next = null;
     try { const m = location.hash.match(/#loop=([^&]+)/); next = m ? decodeURIComponent(m[1]) : null; } catch (e) { next = null; }
@@ -232,10 +241,7 @@ form.task input,form.task select,form.task textarea{border:1px solid var(--line)
     if (changed) {
       lastIterKey = null; tail = []; pending = []; closeForm();
       if (selected) {
-        const name = selected;
-        fetch(`/api/loops/${encodeURIComponent(name)}/session`).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
-          .then((d) => { if (selected !== name) return; tail = d.entries || []; renderTail(); })
-          .catch(() => { if (selected !== name) return; tail = []; renderTail('could not load the session'); });
+        refetchSession(true);
       }
     }
     if (loops.size) render();
@@ -275,7 +281,7 @@ form.task input,form.task select,form.task textarea{border:1px solid var(--line)
   const load = () => fetch('/api/loops').then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); }).then((d) => { loops.clear(); (d.loops || []).forEach((l) => loops.set(l.name, l)); $('root').textContent = 'local · ' + d.root; render(); }).catch(() => {});
   const connect = () => {
     const es = new EventSource('/api/events');
-    es.onopen = () => { $('dot').className = 'dot'; $('live').textContent = 'live'; load(); };
+    es.onopen = () => { $('dot').className = 'dot'; $('live').textContent = 'live'; load(); refetchSession(); };
     es.onerror = () => { $('dot').className = 'dot off'; $('live').textContent = 'reconnecting…'; };
     es.addEventListener('loop', (e) => { const snap = JSON.parse(e.data); loops.set(snap.name, snap); $('live').textContent = 'live · updated ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', second: '2-digit'}); if (selected === snap.name) renderDetail(); else if (!selected) renderBoard(); });
     es.addEventListener('session', (e) => { const d = JSON.parse(e.data); if (d.name !== selected) return; if (d.reset) { tail = d.entries; pending = []; } else if (paused) pending = pending.concat(d.entries).slice(-300); else tail = tail.concat(d.entries).slice(-300); renderTail(); });
