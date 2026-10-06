@@ -133,5 +133,19 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(self.httpd.server_address[0], "127.0.0.1")
 
 
+class IndexTests(unittest.TestCase):
+    def setUp(self):
+        self.html = (Path(srv.__file__).parent / "index.html").read_text(encoding="utf-8")
+
+    def test_theme_and_labels(self):
+        for needle in ("prefers-color-scheme: dark", '[data-theme="dark"]', '[data-theme="light"]', "loopdash.theme",
+                       "API-equivalent", "new EventSource('/api/events')", "id=\"add-task\"", "<title>SnowForge loops</title>"):
+            self.assertIn(needle, self.html, needle)
+
+    def test_no_external_scripts(self):
+        self.assertNotIn("<script src=", self.html)
+        self.assertEqual(self.html.count("<link rel=\"stylesheet\""), 1)  # the one Google Fonts link
+
+
 if __name__ == "__main__":
     unittest.main()
