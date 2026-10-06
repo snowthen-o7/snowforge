@@ -53,5 +53,16 @@ class CliTests(unittest.TestCase):
             self.assertEqual(rec["task"], task)
 
 
+class ReservedKeyTests(unittest.TestCase):
+    def test_reserved_keys_cannot_be_overwritten(self):
+        import contextlib, io
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            rec = emit.record("x", ["event=hijack", "ts=0", "loop=L2", "run=r9", "i=1"],
+                              {"LOOP_NAME": "L", "LOG_DIR": "logs", "LOOP_RUN": "r1"})
+        self.assertEqual(err.getvalue().count("ignoring reserved key"), 4)
+        self.assertEqual((rec["event"], rec["loop"], rec["run"], rec["i"]), ("x", "L", "r1", 1))
+        self.assertNotEqual(rec["ts"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

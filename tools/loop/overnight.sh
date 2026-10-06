@@ -17,7 +17,7 @@ KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TOTAL="${1:-25}"
 MAX_USD="${2:-25}"
 LOOP_NAME="$(basename "$REPO")"; LOG_DIR="logs"; PYTHON="python"
-NOTIFY_TO="alexitofrancis@gmail.com"
+NOTIFY_TO=""                 # who gets the stop notice; set in .loop/config.sh (no default: the kit is public)
 # shellcheck source=/dev/null
 [[ -f .loop/config.sh ]] && source .loop/config.sh
 mkdir -p "$LOG_DIR"
@@ -90,7 +90,9 @@ done
 emit loop_stopped scope=run "code=$rc" "reason=$reason"
 notify_args=()
 [[ -n "${LOOP_NOTIFY_DRY_RUN:-}" ]] && notify_args+=(--dry-run)
-if "$PYTHON" "$KIT/notify.py" --name "$LOOP_NAME" --repo "$REPO" --to "$NOTIFY_TO" \
+if [[ -z "$NOTIFY_TO" ]]; then
+  log "NOTIFY_TO is not set in .loop/config.sh; no stop notice sent"; emit notice_sent ok=false
+elif "$PYTHON" "$KIT/notify.py" --name "$LOOP_NAME" --repo "$REPO" --to "$NOTIFY_TO" \
   --reason "$reason" --code "$rc" --iterations "$done_iters" --log-dir "$LOG_DIR" --run-log "$RUN_LOG" "${notify_args[@]}"; then
   emit notice_sent ok=true
 else

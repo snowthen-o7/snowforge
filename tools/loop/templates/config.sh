@@ -5,9 +5,10 @@ LOOP_NAME="MyApp"          # how stop notices and logs name this loop
 LOG_DIR="logs/loop"        # gitignored; the kit's copy, iteration logs and gate logs go here
 DEFAULT_TIER="sonnet"      # model tier for a task line with no `model:` tag (haiku|sonnet|opus|fable)
 REQUIRE_NON_MAIN=1         # 1: refuse to run on main; run from the loop worktree on branch `loop`
-ARCHIVE_TASKS=0            # 1: move checked lines to TASKS-archive.md before each iteration
+ARCHIVE_TASKS=1            # move checked lines to TASKS-archive.md before each iteration (keeps TASKS.md small: every session reads it)
 PYTHON="python"            # stdlib Python for the kit's helpers
-NOTIFY_TO="alexitofrancis@gmail.com"
+NOTIFY_TO="you@example.com" # who gets the overnight stop notice (required for a notice; the kit has no default)
+LOOP_KEEP_DAYS=14          # launch.sh deletes iteration and gate logs older than this; 0 keeps everything
 
 # The independent gate, run after every iteration in the loop's own shell (never trusted to the
 # session). Keep it the same commands CLAUDE.md tells the session to run.

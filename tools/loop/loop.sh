@@ -102,6 +102,7 @@ PROMPT="Read CLAUDE.md, then TASKS.md. Take the first unchecked task and complet
 
 run_gate() {  # <attempt> <log>: runs the repo's gate and records the result
   local attempt="$1" log="$2"
+  emit gate_started "i=$i" "attempt=$attempt" "log=$log"
   if gate >"$log" 2>&1; then
     emit gate_finished "i=$i" "attempt=$attempt" ok=true "log=$log"; return 0
   fi

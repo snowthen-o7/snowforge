@@ -21,7 +21,7 @@ fresh work in progress, so the two do not collide.
 | `heartbeat.ps1`, `heartbeat.vbs` | Every 15 minutes: emails Alex about an unattended run that died without its stop notice. |
 | `iter_log.py`, `archive_tasks.py` | Per-iteration cost line and log; moves checked task lines to `TASKS-archive.md`. |
 | `templates/` | `config.sh`, the CLAUDE.md sections (`CLAUDE-loop.md`) and a `TASKS.md` to start from. |
-| `emit.py` | Appends one JSON event to `<LOG_DIR>/events.jsonl` (loop started/stopped, iteration started/finished, session finished, gate finished, usage-limit sleep, notice sent). |
+| `emit.py` | Appends one JSON event to `<LOG_DIR>/events.jsonl` (loop started/stopped, iteration started/finished, session finished, gate started/finished, usage-limit sleep, notice sent). |
 | `dashboard/` | The local dashboard: `python tools/loop/dashboard/server.py` → http://127.0.0.1:8787. Reads every loop's events and the live session stream. |
 | `tests/` | `python -m unittest discover -s tools/loop -p "test_*.py"`: the kit against a fake `claude`, and the dashboard. No test calls a model. |
 
@@ -84,12 +84,18 @@ run as `--output-format stream-json`, so `iter-N-<ts>.jsonl` grows while the ses
 batch log, `iter-N-<ts>.log` and the stop notice are unchanged. `LOOP_RUN` groups a run's events
 (overnight.sh sets it for the whole run); a batch started by hand gets its own.
 
+Two settings in `.loop/config.sh` matter for an unattended run: `NOTIFY_TO` (the stop-notice address;
+the kit has no default, a run without it logs "no stop notice sent") and `LOOP_KEEP_DAYS` (default 14:
+`launch.sh` deletes iteration and gate logs older than that before each run, never `events.jsonl` or
+the overnight run logs; `0` keeps everything).
+
 The dashboard reads those files and nothing else:
 
     python tools/loop/dashboard/server.py            # http://127.0.0.1:8787, scans ../ for .loop/config.sh
     python tools/loop/dashboard/server.py --root <folder> --port 8790
 
-It binds to 127.0.0.1 only. The board shows every loop (running / sleeping / stale / stopped with
+It binds to 127.0.0.1 only. To keep it up across logins, register it once as a logon task
+(`SnowForge Loop Dashboard`, running `pythonw.exe tools/loop/dashboard/server.py --port 8787`). The board shows every loop (running / sleeping / stale / stopped with
 the reason / empty), the current iteration and phase, API-equivalent cost (sessions run on the
 Claude Max login, so no money changes hands), and the queue. A loop's page shows the live session
 tail, this run's iterations with gate results, and an "Add task" form that appends a line in the

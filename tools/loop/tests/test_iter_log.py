@@ -86,5 +86,16 @@ class CliTests(unittest.TestCase):
         self.assertEqual(out, "cost_usd=null turns=null duration_ms=null is_error=false usage_limit=false")
 
 
+class UsageLimitScopeTests(unittest.TestCase):
+    def test_quoting_the_phrase_is_not_a_limit(self):
+        result = {"type": "result", "total_cost_usd": 1.0, "num_turns": 2, "duration_ms": 1000, "result": "edited the tests"}
+        text = ["I changed the grep for 'hit your session limit' in loop.sh"]
+        self.assertFalse(iter_log.fields(result, text)["usage_limit"])
+
+    def test_no_result_line_still_reads_the_assistant_text(self):
+        text = ["You've hit your session limit · resets 3am"]
+        self.assertTrue(iter_log.fields(None, text)["usage_limit"])
+
+
 if __name__ == "__main__":
     unittest.main()

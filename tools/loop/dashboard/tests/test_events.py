@@ -214,5 +214,19 @@ class TotalsTests(unittest.TestCase):
         self.assertEqual((far["run"]["count"], far["today"]["count"], far["week"]["count"]), (0, 0, 0))
 
 
+class GateStartedTests(unittest.TestCase):
+    def test_current_names_the_running_gate_log(self):
+        recs = load()
+        started = dict(recs[2], event="gate_started", attempt=1, log="logs/loop/gate-3-x.log", ts="2026-10-05T23:14:00.000Z")
+        started.pop("task_id", None)
+        cur = events.current_iteration(recs + [{**started, "i": 3}])
+        self.assertEqual((cur["gate_log"], cur["gate_started"]), ("logs/loop/gate-3-x.log", "2026-10-05T23:14:00.000Z"))
+        finished = {"ts": "2026-10-05T23:16:00.000Z", "loop": "Alpha", "run": "20261005-221100", "event": "gate_finished",
+                    "i": 3, "attempt": 1, "ok": False, "log": "logs/loop/gate-3-x.log"}
+        cur2 = events.current_iteration(recs + [{**started, "i": 3}, finished])
+        self.assertIsNone(cur2["gate_log"]); self.assertEqual(cur2["phase"], "gate retry")
+        self.assertIsNone(events.current_iteration(recs)["gate_log"])  # old kits never emit gate_started
+
+
 if __name__ == "__main__":
     unittest.main()

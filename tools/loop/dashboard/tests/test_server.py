@@ -186,19 +186,29 @@ class ServerTests(unittest.TestCase):
     def test_running_gate_log_keeps_the_loop_running(self):
         log_dir = self.root / "alpha" / "logs" / "loop"
         gate = log_dir / "gate-3-20261006-000000.log"
+        events_file = log_dir / "events.jsonl"
+        size = events_file.stat().st_size
         old = time.time() - 1200
         saved = {p: p.stat().st_mtime for p in log_dir.glob("*")}
         try:
+            # the kit announces the gate's log before running it; that file is what keeps the loop "running"
+            with events_file.open("a", encoding="utf-8", newline="\n") as f:
+                f.write(json.dumps({"ts": "2026-10-05T23:14:00.000Z", "loop": "Alpha", "run": "20261005-221100",
+                                    "event": "gate_started", "i": 3, "attempt": 1, "log": "logs/loop/gate-3-20261006-000000.log"}) + "\n")
             for p in saved:
                 os.utime(p, (old, old))
             gate.write_text("running", encoding="utf-8")
             self.monitor.poll_once()
             self.assertEqual(self.monitor.watches["Alpha"].snapshot["state"]["state"], "running")
+            self.assertEqual(self.monitor.watches["Alpha"].snapshot["current"]["gate_log"], "logs/loop/gate-3-20261006-000000.log")
             gate.unlink()
+            os.utime(events_file, (old, old))
             self.monitor.poll_once()
             self.assertEqual(self.monitor.watches["Alpha"].snapshot["state"]["state"], "stale")
         finally:
             gate.unlink(missing_ok=True)
+            with events_file.open("r+b") as f:
+                f.truncate(size)
             now = time.time()
             for p in saved:
                 os.utime(p, (now, now))

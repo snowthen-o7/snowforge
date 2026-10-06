@@ -58,11 +58,8 @@ class Watch:
             base = str(gate["log"])
             path = self.loop.path / base
             candidates += [path, Path(f"{path}.retry"), Path(f"{path}.opus")]
-        if current and current.get("i") is not None:  # a gate still running has no gate_finished yet: watch this iteration's logs
-            try:
-                candidates += list(self.loop.log_dir.glob(f"gate-{current['i']}-*.log*"))
-            except OSError:
-                pass
+        if current and current.get("gate_log"):  # a gate still running: the kit's gate_started names its log
+            candidates.append(self.loop.path / str(current["gate_log"]))
         times = []
         for p in candidates:
             if p is None:

@@ -1,7 +1,7 @@
 # tools/loop/tests/test_loop_sh.py
 """Runs loop.sh (and, in Task 4, overnight.sh) against a throwaway git repo with a fake `claude`
 on PATH. No model is ever called."""
-import json, os, shutil, stat, subprocess, sys, tempfile, unittest
+import json, os, shutil, stat, subprocess, sys, tempfile, time, unittest
 from pathlib import Path
 
 KIT = Path(__file__).resolve().parents[1]
@@ -31,7 +31,7 @@ def tearDownModule():
 
 
 class LoopRepo:
-    def __init__(self, tier_default="sonnet", branch="loop", require_non_main=1, tasks=TASKS):
+    def __init__(self, tier_default="sonnet", branch="loop", require_non_main=1, tasks=TASKS, notify_to="test@example.com"):
         self.tmp = tempfile.TemporaryDirectory()
         _REPOS.append(self)
         self.repo = Path(self.tmp.name) / "repo"
@@ -50,7 +50,8 @@ class LoopRepo:
         loop.mkdir()
         (loop / "config.sh").write_text(
             f'LOOP_NAME="Fake"\nLOG_DIR="logs"\nDEFAULT_TIER="{tier_default}"\nREQUIRE_NON_MAIN={require_non_main}\n'
-            f'PYTHON="{posix(sys.executable)}"\nGATE_WORDS="the gate"\ngate() {{ bash .loop/gate.sh; }}\n',
+            f'PYTHON="{posix(sys.executable)}"\nGATE_WORDS="the gate"\ngate() {{ bash .loop/gate.sh; }}\n'
+            + (f'NOTIFY_TO="{notify_to}"\n' if notify_to else '') + 'LOOP_KEEP_DAYS=14\n',
             encoding="utf-8", newline="\n")
         (loop / "gate.sh").write_text(
             'if [[ -f .loop/gate-fail ]]; then n=$(cat .loop/gate-fail); if (( n > 0 )); then '
@@ -96,8 +97,8 @@ class LoopShTests(unittest.TestCase):
         p = r.run()
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         kinds = [e["event"] for e in r.events()]
-        self.assertEqual(kinds, ["loop_started", "iteration_started", "session_finished", "gate_finished", "iteration_finished",
-                                 "iteration_started", "session_finished", "gate_finished", "iteration_finished", "loop_stopped"])
+        self.assertEqual(kinds, ["loop_started", "iteration_started", "session_finished", "gate_started", "gate_finished", "iteration_finished",
+                                 "iteration_started", "session_finished", "gate_started", "gate_finished", "iteration_finished", "loop_stopped"])
         ev = r.events()
         self.assertEqual(ev[0]["scope"], "batch"); self.assertEqual(ev[0]["mode"], "loop"); self.assertEqual(ev[0]["max_iter"], 2)
         self.assertEqual(ev[0]["branch"], "loop")
@@ -105,9 +106,10 @@ class LoopShTests(unittest.TestCase):
         self.assertEqual(ev[1]["model"], "claude-haiku-4-5-20251001"); self.assertEqual(ev[1]["i"], 1)
         self.assertTrue(ev[1]["stream"].startswith("logs/iter-1-"))
         self.assertEqual(ev[2]["cost_usd"], 2.41); self.assertEqual(ev[2]["turns"], 4); self.assertFalse(ev[2]["usage_limit"])
-        self.assertEqual(ev[3]["attempt"], 1); self.assertTrue(ev[3]["ok"]); self.assertTrue(ev[3]["log"].startswith("logs/gate-1-"))
-        self.assertTrue(ev[4]["ok"]); self.assertIn("fake session: task done", ev[4]["commit"])
-        self.assertEqual(ev[5]["tier"], "sonnet"); self.assertEqual(ev[5]["model"], "claude-sonnet-5")
+        self.assertEqual((ev[3]["event"], ev[3]["attempt"]), ("gate_started", 1)); self.assertTrue(ev[3]["log"].startswith("logs/gate-1-"))
+        self.assertEqual(ev[4]["attempt"], 1); self.assertTrue(ev[4]["ok"]); self.assertEqual(ev[4]["log"], ev[3]["log"])
+        self.assertTrue(ev[5]["ok"]); self.assertIn("fake session: task done", ev[5]["commit"])
+        self.assertEqual(ev[6]["tier"], "sonnet"); self.assertEqual(ev[6]["model"], "claude-sonnet-5")
         self.assertEqual(ev[-1]["code"], 0); self.assertEqual(ev[-1]["scope"], "batch")
         self.assertTrue(all(e["run"] == ev[0]["run"] for e in ev))
         self.assertIn("=== iteration 1 (", p.stdout); self.assertIn("cost: $2.41, 4 turns, 1 min", p.stdout)
@@ -197,7 +199,31 @@ class LoopShTests(unittest.TestCase):
         self.assertIsNone([e for e in r.events() if e["event"] == "session_finished"][0]["cost_usd"])
 
 
+class LaunchShTests(unittest.TestCase):
+    def test_launch_prunes_old_logs_and_snapshots_the_kit(self):
+        r = LoopRepo()
+        logs = r.repo / "logs"; logs.mkdir()
+        old = time.time() - 20 * 86400
+        for name in ("iter-1-old.jsonl", "iter-1-old.log", "gate-1-old.log", "overnight-batch-old.log"):
+            (logs / name).write_text("x", encoding="utf-8"); os.utime(logs / name, (old, old))
+        (logs / "events.jsonl").write_text("", encoding="utf-8"); os.utime(logs / "events.jsonl", (old, old))
+        (logs / "gate-1-fresh.log").write_text("x", encoding="utf-8")
+        p = r.run(script="launch.sh", args=("loop", "1", "25"))
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        names = {q.name for q in logs.iterdir()}
+        self.assertTrue({"iter-1-old.jsonl", "iter-1-old.log", "gate-1-old.log", "overnight-batch-old.log"}.isdisjoint(names), names)
+        self.assertIn("events.jsonl", names); self.assertIn("gate-1-fresh.log", names)
+        self.assertTrue((logs / ".loop-kit" / "emit.py").is_file()); self.assertTrue((logs / ".loop-kit" / "VERSION").is_file())
+
+
 class OvernightTests(unittest.TestCase):
+    def test_no_notify_to_means_no_notice(self):
+        r = LoopRepo(notify_to="")
+        p = r.run(script="overnight.sh", args=("1", "25"))
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("NOTIFY_TO is not set in .loop/config.sh; no stop notice sent", p.stdout)
+        self.assertEqual((r.events()[-1]["event"], r.events()[-1]["ok"]), ("notice_sent", False))
+
     def test_run_events_and_dry_notice(self):
         r = LoopRepo()
         p = r.run(script="overnight.sh", args=("2", "25"))
@@ -219,7 +245,7 @@ class OvernightTests(unittest.TestCase):
         kinds = [e["event"] + ("/" + e["scope"] if "scope" in e else "") for e in ev]
         self.assertEqual(kinds, ["loop_started/run", "loop_started/batch", "iteration_started", "session_finished",
                                  "iteration_finished", "loop_stopped/batch", "usage_limit_sleep", "loop_started/batch", "iteration_started",
-                                 "session_finished", "gate_finished", "iteration_finished", "loop_stopped/batch",
+                                 "session_finished", "gate_started", "gate_finished", "iteration_finished", "loop_stopped/batch",
                                  "loop_stopped/run", "notice_sent"])
         sleep = ev[6]
         self.assertGreater(sleep["seconds"], 0)

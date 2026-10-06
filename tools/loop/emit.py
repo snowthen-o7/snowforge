@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Mapping
 
 _NUMBER = re.compile(r"^-?(0|[1-9]\d*)(\.\d+)?$")
+RESERVED = {"ts", "loop", "run", "event"}  # set by record(); a caller's key=value cannot overwrite them
 
 
 def coerce(value: str) -> object:
@@ -46,6 +47,9 @@ def record(event: str, pairs: list[str], env: Mapping[str, str]) -> dict:
     }
     for pair in pairs:
         key, _, value = pair.partition("=")
+        if key in RESERVED:
+            print(f"emit.py: ignoring reserved key {key!r} in {event}", file=sys.stderr)
+            continue
         rec[key] = coerce(value)
     return rec
 

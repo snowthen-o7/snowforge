@@ -16,7 +16,7 @@ fi
 [[ -n "${FAKE_CLAUDE_LOG:-}" ]] && printf '%s\n' "$*" >> "$FAKE_CLAUDE_LOG"
 case "$stream" in
   *success*)
-    python - <<'EOF'
+    "${PYTHON:-python}" - <<'EOF'
 import pathlib
 p = pathlib.Path("TASKS.md"); s = p.read_text(encoding="utf-8")
 p.write_text(s.replace("- [ ]", "- [x]", 1), encoding="utf-8", newline="\n")

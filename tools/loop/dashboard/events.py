@@ -119,6 +119,8 @@ def current_iteration(events: list[dict]) -> dict | None:
     if last is None:
         return None
     phase = "session"
+    gate_log = None
+    gate_started = None
     for batch, e in tagged:
         if e.get("event") == "loop_stopped" and e.get("scope") == "batch" and (e.get("run", ""), batch) == last_key[:2]:
             return None  # the batch ended with this iteration still open: it was aborted
@@ -129,12 +131,16 @@ def current_iteration(events: list[dict]) -> dict | None:
             return None
         if kind == "session_finished":
             phase = "gate opus" if e.get("attempt") == "opus" else "gate 1"
-        elif kind == "gate_finished" and not e.get("ok"):
-            phase = "gate retry" if e.get("attempt") == 1 else ("opus session" if e.get("attempt") == "retry" else phase)
+        elif kind == "gate_started":  # the kit names the log it is about to write (since 2026-10-06)
+            gate_log, gate_started = e.get("log"), e.get("ts")
+        elif kind == "gate_finished":
+            gate_log, gate_started = None, None
+            if not e.get("ok"):
+                phase = "gate retry" if e.get("attempt") == 1 else ("opus session" if e.get("attempt") == "retry" else phase)
     return {"run": last.get("run", ""), "batch": last_key[1], "i": last.get("i"), "ordinal": ordinal,
             "task_id": last.get("task_id"), "task": _task_text(last.get("task")),
             "model": last.get("model"), "tier": last.get("tier"), "started": last.get("ts"),
-            "stream": last.get("stream"), "phase": phase}
+            "stream": last.get("stream"), "phase": phase, "gate_log": gate_log, "gate_started": gate_started}
 
 
 def run_summary(events: list[dict]) -> dict | None:

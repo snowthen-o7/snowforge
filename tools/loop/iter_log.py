@@ -57,7 +57,10 @@ def parse_stream(raw: str) -> tuple[dict | None, list[str]]:
 
 
 def fields(result: dict | None, text: list[str]) -> dict:
-    report = str((result or {}).get("result") or "") + "\n".join(text)
+    # The usage-limit phrase is read from the result line when there is one; the assistant's own
+    # text is scanned only for a session that never produced a result (killed mid-run), so a
+    # session merely quoting the phrase is not mistaken for one that hit the limit.
+    report = str(result.get("result") or "") if result is not None else "\n".join(text)
     cost = (result or {}).get("total_cost_usd")
     turns = (result or {}).get("num_turns")
     ms = (result or {}).get("duration_ms")

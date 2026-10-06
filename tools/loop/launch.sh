@@ -15,8 +15,16 @@ shift 2
 case "$MODE" in loop|overnight) ;; *) echo "mode must be loop or overnight" >&2; exit 2 ;; esac
 KIT_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="logs"
+KEEP_DAYS="14"
 if [[ -f "$REPO/.loop/config.sh" ]]; then
   LOG_DIR="$(cd "$REPO" && bash -c 'LOG_DIR=logs; gate() { :; }; source .loop/config.sh >/dev/null 2>&1; echo "$LOG_DIR"')"
+  KEEP_DAYS="$(cd "$REPO" && bash -c 'LOOP_KEEP_DAYS=14; gate() { :; }; source .loop/config.sh >/dev/null 2>&1; echo "$LOOP_KEEP_DAYS"')"
+fi
+# Per-iteration and gate logs pile up (RiftMind reached 2,000 files / 350 MB in a month); drop the
+# ones older than LOOP_KEEP_DAYS before each run. events.jsonl and the overnight run logs are kept.
+if [[ "$KEEP_DAYS" =~ ^[0-9]+$ && "$KEEP_DAYS" -gt 0 && -d "$REPO/$LOG_DIR" ]]; then
+  find "$REPO/$LOG_DIR" -maxdepth 1 -type f -mtime "+$KEEP_DAYS" \
+    \( -name 'iter-*' -o -name 'gate-*' -o -name 'overnight-batch-*' -o -name 'batch-*' \) -delete
 fi
 SNAP="$REPO/$LOG_DIR/.loop-kit"
 rm -rf "$SNAP"
