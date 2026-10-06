@@ -42,6 +42,19 @@ class ComposeTests(unittest.TestCase):
                 queue.compose_line(bad)
             self.assertEqual(ctx.exception.code, "invalid")
 
+    def test_newline_in_title_cannot_add_a_second_line(self):
+        result = queue.compose_line({**FIELDS, "title": "x\n- [ ] T999 evil model:opus"})
+        self.assertNotIn("\n", result)
+        self.assertIn("x - [ ] T999 evil model:opus", result)
+        with self.assertRaises(queue.QueueError) as ctx:
+            queue.compose_line({**FIELDS, "who": "a\x00b"})
+        self.assertEqual(ctx.exception.code, "invalid")
+
+    def test_double_star_in_title_refused(self):
+        with self.assertRaises(queue.QueueError) as ctx:
+            queue.compose_line({**FIELDS, "title": "x**y"})
+        self.assertEqual(ctx.exception.code, "invalid")
+
 
 class AppendTests(unittest.TestCase):
     def setUp(self):
@@ -96,6 +109,33 @@ class AppendTests(unittest.TestCase):
         queue.append_task(self.repo, FIELDS, queue.file_sha(self.repo / "TASKS.md"))
         lines = (self.repo / "TASKS.md").read_text(encoding="utf-8").splitlines()
         self.assertEqual(lines[3][:11], "- [ ] T005 ")
+
+    def test_write_is_single_file_replace(self):
+        out = queue.append_task(self.repo, FIELDS, self.sha)
+        tmp_files = list((self.repo).glob(".TASKS.*.tmp"))
+        self.assertEqual(len(tmp_files), 0, "Temp file should be cleaned up after successful write")
+        self.assertEqual(out["sha"], queue.file_sha(self.repo / "TASKS.md"))
+
+    def test_git_failure_refuses(self):
+        import shutil
+        repo_no_git = Path(tempfile.mkdtemp())
+        try:
+            (repo_no_git / "TASKS.md").write_text(ALPHA_TASKS + "\n## Notes\n\nsome prose\n", encoding="utf-8", newline="\n")
+            sha = queue.file_sha(repo_no_git / "TASKS.md")
+            with self.assertRaises(queue.QueueError) as ctx:
+                queue.append_task(repo_no_git, FIELDS, sha)
+            self.assertEqual(ctx.exception.code, "git")
+        finally:
+            shutil.rmtree(repo_no_git, ignore_errors=True)
+
+    def test_crlf_file_keeps_crlf(self):
+        (self.repo / "TASKS.md").write_text(ALPHA_TASKS + "\n## Notes\n\nsome prose\n", encoding="utf-8", newline="\r\n")
+        sha = queue.file_sha(self.repo / "TASKS.md")
+        out = queue.append_task(self.repo, FIELDS, sha)
+        data = (self.repo / "TASKS.md").read_bytes()
+        self.assertIn(b"\r\n", data)
+        self.assertEqual(data.replace(b"\r\n", b"").find(b"\n"), -1)
+        self.assertIn(out["line"].encode("utf-8"), data)
 
 
 if __name__ == "__main__":
