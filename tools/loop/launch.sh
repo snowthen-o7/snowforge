@@ -21,5 +21,6 @@ fi
 SNAP="$REPO/$LOG_DIR/.loop-kit"
 rm -rf "$SNAP"
 mkdir -p "$SNAP"
-cp "$KIT_SRC"/loop.sh "$KIT_SRC"/overnight.sh "$KIT_SRC"/notify.py "$KIT_SRC"/iter_log.py "$KIT_SRC"/archive_tasks.py "$SNAP"/
+cp "$KIT_SRC"/loop.sh "$KIT_SRC"/overnight.sh "$KIT_SRC"/notify.py "$KIT_SRC"/iter_log.py "$KIT_SRC"/archive_tasks.py "$KIT_SRC"/emit.py "$SNAP"/
+git -C "$KIT_SRC" rev-parse --short HEAD > "$SNAP/VERSION" 2>/dev/null || echo unknown > "$SNAP/VERSION"
 exec bash "$SNAP/$MODE.sh" "$REPO" "$@"
