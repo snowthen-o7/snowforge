@@ -10,6 +10,8 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
+from tools.loop.dashboard import loops
+
 TIERS = ("haiku", "sonnet", "opus", "fable")
 _OPEN = re.compile(r"^- \[ \] +(\S+)(.*)$")
 _ANY = re.compile(r"^- \[[ xX]\] +(\S+)")
@@ -95,7 +97,7 @@ def is_staged(repo: Path) -> bool:
     try:
         # Check for staged changes
         out = subprocess.run(["git", "-C", str(repo), "diff", "--cached", "--name-only", "--", "TASKS.md"],
-                             capture_output=True, text=True, timeout=10, check=False)
+                             capture_output=True, text=True, timeout=10, check=False, **loops.QUIET)
         if out.returncode != 0:
             raise QueueError("git", f"could not check the git index: {out.stderr[:200]}")
         return bool(out.stdout.strip())

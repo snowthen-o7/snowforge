@@ -23,10 +23,15 @@ def parse_config(text: str) -> dict:
     return found
 
 
+# Under pythonw (the logon task) every child console program would flash its own window; this
+# keeps git silent. Harmless elsewhere (the flag exists only on Windows).
+QUIET = {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0), "stdin": subprocess.DEVNULL}
+
+
 def branch_of(path: Path) -> str:
     try:
         out = subprocess.run(["git", "-C", str(path), "rev-parse", "--abbrev-ref", "HEAD"],
-                             capture_output=True, text=True, timeout=10)
+                             capture_output=True, text=True, timeout=10, **QUIET)
     except (OSError, subprocess.SubprocessError):
         return "?"
     return out.stdout.strip() if out.returncode == 0 and out.stdout.strip() else "?"
