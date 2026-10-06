@@ -21,6 +21,9 @@ fresh work in progress, so the two do not collide.
 | `heartbeat.ps1`, `heartbeat.vbs` | Every 15 minutes: emails Alex about an unattended run that died without its stop notice. |
 | `iter_log.py`, `archive_tasks.py` | Per-iteration cost line and log; moves checked task lines to `TASKS-archive.md`. |
 | `templates/` | `config.sh`, the CLAUDE.md sections (`CLAUDE-loop.md`) and a `TASKS.md` to start from. |
+| `emit.py` | Appends one JSON event to `<LOG_DIR>/events.jsonl` (loop started/stopped, iteration started/finished, session finished, gate finished, usage-limit sleep, notice sent). |
+| `dashboard/` | The local dashboard: `python tools/loop/dashboard/server.py` → http://127.0.0.1:8787. Reads every loop's events and the live session stream. |
+| `tests/` | `python -m unittest discover -s tools/loop -p "test_*.py"`: the kit against a fake `claude`, and the dashboard. No test calls a model. |
 
 ## Start a loop in a new project
 
@@ -73,6 +76,28 @@ fresh work in progress, so the two do not collide.
   this is what catches that. A new unattended loop is covered as soon as its scheduled task exists.
 - **Stops that matter.** `docs/BLOCKED.md` (needs a person), an API error or expired login, the usage
   limit (slept through overnight), an empty queue.
+
+## Events and the dashboard
+
+Every batch appends one JSON line per event to `<LOG_DIR>/events.jsonl` (`emit.py`), and sessions
+run as `--output-format stream-json`, so `iter-N-<ts>.jsonl` grows while the session works. The
+batch log, `iter-N-<ts>.log` and the stop notice are unchanged. `LOOP_RUN` groups a run's events
+(overnight.sh sets it for the whole run); a batch started by hand gets its own.
+
+The dashboard reads those files and nothing else:
+
+    python tools/loop/dashboard/server.py            # http://127.0.0.1:8787, scans ../ for .loop/config.sh
+    python tools/loop/dashboard/server.py --root <folder> --port 8790
+
+It binds to 127.0.0.1 only. The board shows every loop (running / sleeping / stale / stopped with
+the reason / empty), the current iteration and phase, API-equivalent cost (sessions run on the
+Claude Max login, so no money changes hands), and the queue. A loop's page shows the live session
+tail, this run's iterations with gate results, and an "Add task" form that appends a line in the
+kit's task format to `TASKS.md` (refused when the file changed since the preview or has staged
+changes; the next session's checkoff commit carries the line). Theme: system / light / dark.
+
+A loop adopts the events kit at its next launch (`launch.sh` copies the kit per run); a loop that
+was mid-run when the kit changed shows "no events yet" until then.
 
 ## Supervising
 
