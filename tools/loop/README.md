@@ -114,8 +114,8 @@ a loop that checked its queue a moment before the append exits on "No unchecked 
 
 ## Exceptions in use
 
-- **RiftMind (engine)** runs on its main checkout (`REQUIRE_NON_MAIN=0`): its tests and tasks read
-  gitignored data in that checkout (fetched decklists, raw card data, game logs, the nightly self-play
-  review's output) and the local board server runs from it. Moving it to a worktree needs those copied
-  with timestamps (`cp -rp`: decklists are dated by file time) and the nightly review re-pointed; until
-  then it is the documented exception.
+- None since 2026-10-06. RiftMind ran on its main checkout until then (its tests and tasks read
+  gitignored data: fetched decklists, raw card data, game logs, the nightly self-play review's
+  output); it now runs in `RiftMind-loop` on branch `loop`, with that data copied over with
+  timestamps (`cp -rp` / robocopy: decklists are dated by file time) and the `RiftMindOvernight` and
+  `RiftMindSelfplay` tasks pointed at the worktree. Merge `loop` into `main` to take its work.
