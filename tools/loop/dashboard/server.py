@@ -51,13 +51,18 @@ class Watch:
     def events_path(self) -> Path:
         return self.loop.log_dir / "events.jsonl"
 
-    def last_activity(self) -> dt.datetime | None:
+    def last_activity(self, current: dict | None = None) -> dt.datetime | None:
         candidates: list[Path | None] = [self.events_path(), self.stream]
         gate = next((e for e in reversed(self.events) if e.get("event") == "gate_finished" and e.get("log")), None)
         if gate:  # the running gate's output: the last gate_finished names the log (and its retry / opus siblings)
             base = str(gate["log"])
             path = self.loop.path / base
             candidates += [path, Path(f"{path}.retry"), Path(f"{path}.opus")]
+        if current and current.get("i") is not None:  # a gate still running has no gate_finished yet: watch this iteration's logs
+            try:
+                candidates += list(self.loop.log_dir.glob(f"gate-{current['i']}-*.log*"))
+            except OSError:
+                pass
         times = []
         for p in candidates:
             if p is None:
@@ -178,7 +183,7 @@ class Monitor(threading.Thread):
         now = dt.datetime.now(ev.UTC)
         its = ev.join_iterations(w.events)
         run = ev.run_summary(w.events)
-        activity = w.last_activity()
+        activity = w.last_activity(current)
         tasks_path = w.loop.path / "TASKS.md"
         q = tasks.parse_queue(tasks_path.read_text(encoding="utf-8", errors="replace")) if tasks_path.is_file() else []
         if current:  # no elapsed here: it would change the snapshot every poll; the page counts from `started`
@@ -270,8 +275,10 @@ class Monitor(threading.Thread):
 
     def unsubscribe(self, q: queue_mod.Queue) -> None:
         with self.lock:
-            if q in self.subscribers:
-                self.subscribers.remove(q)
+            try:
+                self.subscribers.remove(q)  # publish may have dropped it already
+            except ValueError:
+                pass
 
     def publish(self, kind: str, data: dict) -> None:
         payload = json.dumps(data, default=str)

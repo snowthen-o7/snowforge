@@ -182,6 +182,27 @@ class ServerTests(unittest.TestCase):
                 f.truncate(size)
             self.monitor.poll_once()
 
+    def test_running_gate_log_keeps_the_loop_running(self):
+        log_dir = self.root / "alpha" / "logs" / "loop"
+        gate = log_dir / "gate-3-20261006-000000.log"
+        old = time.time() - 1200
+        saved = {p: p.stat().st_mtime for p in log_dir.glob("*")}
+        try:
+            for p in saved:
+                os.utime(p, (old, old))
+            gate.write_text("running", encoding="utf-8")
+            self.monitor.poll_once()
+            self.assertEqual(self.monitor.watches["Alpha"].snapshot["state"]["state"], "running")
+            gate.unlink()
+            self.monitor.poll_once()
+            self.assertEqual(self.monitor.watches["Alpha"].snapshot["state"]["state"], "stale")
+        finally:
+            gate.unlink(missing_ok=True)
+            now = time.time()
+            for p in saved:
+                os.utime(p, (now, now))
+            self.monitor.poll_once()
+
     def test_last_activity_none_without_files(self):
         self.assertIsNone(self.monitor.watches["beta"].last_activity())
 
