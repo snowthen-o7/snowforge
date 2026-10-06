@@ -39,6 +39,7 @@ class Loop:
     log_dir: Path
     branch: str
     warnings: list[str] = field(default_factory=list)
+    launched: bool = False  # the kit has run here: a kit snapshot or an events file exists in log_dir
 
 
 def discover(root: Path) -> list[Loop]:
@@ -52,8 +53,10 @@ def discover(root: Path) -> list[Loop]:
             warnings.append("git: not a repository or git failed; branch unknown")
         if not (checkout / "TASKS.md").is_file():
             warnings.append("TASKS.md missing")
+        log_dir = checkout / cfg.get("LOG_DIR", "logs")
+        launched = (log_dir / ".loop-kit").is_dir() or (log_dir / "events.jsonl").is_file()
         loops.append(Loop(name=cfg.get("LOOP_NAME") or checkout.name, path=checkout,
-                          log_dir=checkout / cfg.get("LOG_DIR", "logs"), branch=branch, warnings=warnings))
+                          log_dir=log_dir, branch=branch, warnings=warnings, launched=launched))
     loops.sort(key=lambda l: l.name.lower())
     counts: dict[str, int] = {}
     for loop in loops:

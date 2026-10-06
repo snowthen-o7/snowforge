@@ -22,6 +22,8 @@ class DiscoverTests(unittest.TestCase):
         self.assertEqual(alpha.log_dir, ROOT / "alpha" / "logs" / "loop")
         self.assertEqual(beta.log_dir, ROOT / "beta" / "logs")
         self.assertEqual(beta.name, "beta")  # folder name when LOOP_NAME is absent
+        self.assertTrue(alpha.launched)   # alpha's log dir holds an events file
+        self.assertFalse(beta.launched)   # beta has never run the kit
 
     def test_git_failure_gives_question_mark_branch(self):
         # The fixtures sit inside the SnowForge checkout, so git would answer there; copy them out.

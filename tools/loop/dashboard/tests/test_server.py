@@ -55,6 +55,7 @@ class ServerTests(unittest.TestCase):
         self.assertAlmostEqual(a["totals"]["run"]["cost"], 5.43)
         b = loops["beta"]
         self.assertEqual(b["state"]["state"], "empty"); self.assertIn("TASKS.md missing", b["warnings"])
+        self.assertTrue(a["launched"]); self.assertFalse(b["launched"])  # beta never ran the kit: the page folds it away
 
     def test_session_and_iterations(self):
         status, _, body = self.get("/api/loops/Alpha/session")
@@ -286,7 +287,8 @@ class IndexTests(unittest.TestCase):
 
     def test_theme_and_labels(self):
         for needle in ("prefers-color-scheme: dark", '[data-theme="dark"]', '[data-theme="light"]', "loopdash.theme",
-                       "API-equivalent", "new EventSource('/api/events')", "id=\"add-task\"", "<title>SnowForge loops</title>"):
+                       "API-equivalent", "new EventSource('/api/events')", "id=\"add-task\"", "<title>SnowForge loops</title>",
+                       "with a loop config that never launched", "id=\"idle\""):
             self.assertIn(needle, self.html, needle)
 
     def test_no_raw_tier_interpolation(self):

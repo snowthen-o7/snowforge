@@ -188,7 +188,7 @@ class Monitor(threading.Thread):
         q = tasks.parse_queue(tasks_path.read_text(encoding="utf-8", errors="replace")) if tasks_path.is_file() else []
         if current:  # no elapsed here: it would change the snapshot every poll; the page counts from `started`
             current = dict(current, turns=sum(1 for e in w.tail if e["kind"] == "said"))
-        return {"name": w.loop.name, "path": str(w.loop.path), "branch": w.loop.branch, "warnings": w.loop.warnings,
+        return {"name": w.loop.name, "path": str(w.loop.path), "launched": w.loop.launched, "branch": w.loop.branch, "warnings": w.loop.warnings,
                 "parse_errors": w.parse_errors, "state": ev.derive_state(w.events, now, activity), "run": run,
                 "current": current, "totals": ev.totals(its, now, run["run"] if run else None), "queue": q,
                 "last_activity": activity.isoformat() if activity else None, "iterations_count": len(its),
@@ -215,7 +215,7 @@ class Monitor(threading.Thread):
             return self._snapshot(w, ev.current_iteration(w.events))
         except Exception as error:
             now = dt.datetime.now(ev.UTC)
-            return {"name": w.loop.name, "path": str(w.loop.path), "branch": w.loop.branch,
+            return {"name": w.loop.name, "path": str(w.loop.path), "launched": w.loop.launched, "branch": w.loop.branch,
                     "warnings": list(w.loop.warnings) + [f"poll error: {type(error).__name__}: {error}"],
                     "parse_errors": w.parse_errors, "state": {"state": "error", "reason": str(error), "until": None},
                     "run": None, "current": None, "totals": ev.totals([], now, None), "queue": [],

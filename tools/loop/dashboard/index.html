@@ -77,6 +77,7 @@ form.task input,form.task select,form.task textarea{border:1px solid var(--line)
   <section id="board">
     <div class="tiles" id="tiles"></div>
     <div class="cards" id="cards" style="margin-top:16px"></div>
+    <div class="sub" id="idle" style="margin-top:10px"></div>
     <div style="margin-top:20px;display:flex;flex-direction:column;gap:8px">
       <div class="row"><h2>Recent iterations, all loops</h2><span class="sub" id="recent-sub"></span></div>
       <div class="box"><table><thead><tr><th>When</th><th>Loop</th><th>Iter</th><th>Task</th><th>Tier</th><th>API-equivalent</th><th>Turns</th><th>Min</th><th>Gate</th><th>Commit</th></tr></thead><tbody id="recent"></tbody></table></div>
@@ -150,7 +151,10 @@ form.task input,form.task select,form.task textarea{border:1px solid var(--line)
   };
 
   function renderBoard() {
-    const all = [...loops.values()].sort((a, b) => a.name.localeCompare(b.name));
+    const every = [...loops.values()].sort((a, b) => a.name.localeCompare(b.name));
+    const all = every.filter((l) => l.launched !== false);
+    const idle = every.filter((l) => l.launched === false);
+    $('idle').innerHTML = idle.length ? `<details><summary>${idle.length} checkout${idle.length === 1 ? '' : 's'} with a loop config that never launched</summary>${idle.map((l) => `<div>${esc(l.name)} <span class="chip mono">${esc(l.branch)}</span></div>`).join('')}</details>` : '';
     const running = all.filter((l) => l.state.state === 'running').length;
     const today = all.reduce((acc, l) => { acc.cost += l.totals.today.cost; acc.n += l.totals.today.count; return acc; }, {cost: 0, n: 0});
     const recent = all.flatMap((l) => (l.recent || []).map((it) => ({...it, loop: l.name}))).sort((a, b) => (b.started || '').localeCompare(a.started || '')).slice(0, 12);
