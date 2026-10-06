@@ -12,7 +12,10 @@ task: `SnowForge/tools/loop/README.md`.)
 3. If the task is blocked on something only Alex can give (an account, a key, a decision, a rule the
    docs do not settle), write `docs/BLOCKED.md` saying precisely what is needed, commit, and exit.
 4. Before finishing, run the gate in the foreground: `<the same commands as .loop/config.sh gate()>`.
-   All green or you are not done. A dependency change commits its lockfile.
+   All green or you are not done. A dependency change commits its lockfile. **Never end your turn
+   while a background command runs**: the session exits when your turn ends and kills its background
+   jobs with it (RiftMind T225 lost 25 minutes of a measurement this way, 2026-10-06). Wait on a long
+   run in the foreground with repeated `timeout 590 bash -c 'until <it is done>; do sleep 20; done'`.
 5. Check the task off with a note of at most about 100 words (what shipped, the number that decided it,
    what was left). Commit `<id>: <summary>`, at most twelve lines. **Alex is the sole author of every
    commit: no `Co-Authored-By` or other AI-attribution trailer.** Never push, never deploy. Exit.
