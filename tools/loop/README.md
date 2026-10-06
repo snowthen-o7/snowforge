@@ -84,8 +84,9 @@ run as `--output-format stream-json`, so `iter-N-<ts>.jsonl` grows while the ses
 batch log, `iter-N-<ts>.log` and the stop notice are unchanged. `LOOP_RUN` groups a run's events
 (overnight.sh sets it for the whole run); a batch started by hand gets its own.
 
-Two settings in `.loop/config.sh` matter for an unattended run: `NOTIFY_TO` (the stop-notice address;
-the kit has no default, a run without it logs "no stop notice sent") and `LOOP_KEEP_DAYS` (default 14:
+Two settings in `.loop/config.sh` matter for an unattended run: `NOTIFY_TO` (optional stop email; the
+SnowForge loops leave it empty and watch the dashboard instead, and a run without it logs "no stop
+notice sent") and `LOOP_KEEP_DAYS` (default 14:
 `launch.sh` deletes iteration and gate logs older than that before each run, never `events.jsonl` or
 the overnight run logs; `0` keeps everything).
 

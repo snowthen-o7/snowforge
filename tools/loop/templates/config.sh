@@ -7,7 +7,7 @@ DEFAULT_TIER="sonnet"      # model tier for a task line with no `model:` tag (ha
 REQUIRE_NON_MAIN=1         # 1: refuse to run on main; run from the loop worktree on branch `loop`
 ARCHIVE_TASKS=1            # move checked lines to TASKS-archive.md before each iteration (keeps TASKS.md small: every session reads it)
 PYTHON="python"            # stdlib Python for the kit's helpers
-NOTIFY_TO="you@example.com" # who gets the overnight stop notice (required for a notice; the kit has no default)
+NOTIFY_TO=""               # optional stop email (Resend via Doppler); empty = none, the loop dashboard shows stops
 LOOP_KEEP_DAYS=14          # launch.sh deletes iteration and gate logs older than this; 0 keeps everything
 
 # The independent gate, run after every iteration in the loop's own shell (never trusted to the
