@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import queue as queue_mod
 import re
 import sys
 import threading
@@ -24,29 +25,13 @@ if __name__ == "__main__":  # `python tools/loop/dashboard/server.py`: make the 
     sys.path.insert(0, str(HERE.parents[2]))
 
 
-def _stdlib_queue():
-    """The stdlib `queue`, even when this folder is on sys.path (our queue.py would shadow it)."""
-    cached = sys.modules.get("queue")
-    if cached is not None and hasattr(cached, "Queue"):
-        return cached
-    sys.modules.pop("queue", None)
-    saved = sys.path[:]
-    sys.path[:] = [p for p in saved if Path(p or ".").resolve() != HERE]
-    try:
-        import queue as stdlib_queue
-    finally:
-        sys.path[:] = saved
-    return stdlib_queue
-
-
-queue_mod = _stdlib_queue()
-
 from tools.loop.dashboard import events as ev
 from tools.loop.dashboard import loops as discovery
-from tools.loop.dashboard import queue as tasks
+from tools.loop.dashboard import taskqueue as tasks
 from tools.loop.dashboard import tail as tailing
 
 TAIL_LIMIT = 300
+MAX_BODY = 1 << 20
 _ROUTE = re.compile(r"^/api/loops/([^/]+)/(session|iterations|queue|tasks)$")
 
 
@@ -106,14 +91,31 @@ class Monitor(threading.Thread):
     # --- polling -----------------------------------------------------------------------------
     def poll_once(self) -> None:
         if time.monotonic() - self._last_scan >= self.rescan_s:
-            self.rescan()
+            try:
+                self.rescan()
+            except Exception as error:  # keep the monitor alive; no single loop owns this
+                self._last_scan = time.monotonic()
+                print(f"loop dashboard: rescan error: {type(error).__name__}: {error}", file=sys.stderr)
         with self.lock:
             watches = list(self.watches.values())
         for w in watches:
             try:
                 self._poll_watch(w)
+                if any(x.startswith(("read error", "poll error")) for x in w.loop.warnings):
+                    w.loop.warnings = [x for x in w.loop.warnings if not x.startswith(("read error", "poll error"))]
+                    w.snapshot_json = ""  # recovered: republish with the warning gone
+                    self._poll_watch(w)
             except OSError as error:
-                w.loop.warnings = [x for x in w.loop.warnings if not x.startswith("read error")] + [f"read error: {error}"]
+                self._warn(w, f"read error: {error}")
+            except Exception as error:  # bad data must not kill the monitor thread
+                self._warn(w, f"poll error: {type(error).__name__}: {error}")
+
+    @staticmethod
+    def _warn(w: Watch, message: str) -> None:
+        w.loop.warnings = [x for x in w.loop.warnings if not x.startswith(("read error", "poll error"))] + [message]
+        if w.snapshot is not None:  # the last good snapshot keeps being served; show why it is stale
+            w.snapshot = dict(w.snapshot, warnings=list(w.loop.warnings))
+            w.snapshot_json = ""  # republish once the data parses again
 
     def _poll_watch(self, w: Watch) -> None:
         path = w.events_path()
@@ -127,9 +129,12 @@ class Monitor(threading.Thread):
         wanted = self._stream_for(w, current)
         if wanted != w.stream:
             w.stream, w.stream_offset = wanted, 0
-            w.tail = tailing.bootstrap(wanted, w.loop.path) if wanted else []
-            if wanted and wanted.exists():
-                w.stream_offset = wanted.stat().st_size
+            w.tail = []
+            if wanted and wanted.is_file():
+                lines, used = tailing.split_complete(wanted.read_bytes())
+                w.stream_offset = used
+                rendered = [e for line in lines for e in tailing.render_line(line, w.loop.path, "")]
+                w.tail = rendered[-TAIL_LIMIT:]
             self.publish("session", {"name": w.loop.name, "reset": True, "entries": w.tail})
         elif w.stream and w.stream.exists():
             with w.stream.open("rb") as handle:
@@ -166,7 +171,11 @@ class Monitor(threading.Thread):
         tasks_path = w.loop.path / "TASKS.md"
         q = tasks.parse_queue(tasks_path.read_text(encoding="utf-8", errors="replace")) if tasks_path.is_file() else []
         if current:
-            current = dict(current, elapsed_s=int((now - ev.parse_ts(current["started"])).total_seconds()) if current.get("started") else None,
+            try:
+                elapsed = int((now - ev.parse_ts(current["started"])).total_seconds())
+            except (ValueError, TypeError, KeyError):
+                elapsed = None
+            current = dict(current, elapsed_s=elapsed,
                            turns=sum(1 for e in w.tail if e["kind"] == "said"))
         return {"name": w.loop.name, "path": str(w.loop.path), "branch": w.loop.branch, "warnings": w.loop.warnings,
                 "parse_errors": w.parse_errors, "state": ev.derive_state(w.events, now, activity), "run": run,
@@ -289,7 +298,17 @@ class Handler(BaseHTTPRequestHandler):
         if not m or m.group(2) != "tasks":
             self._json(404, {"code": "not_found", "message": "no such route"})
             return
-        length = int(self.headers.get("Content-Length") or 0)
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = -1
+        if length < 0:
+            self._json(400, {"code": "invalid", "message": "bad Content-Length"})
+            return
+        if length > MAX_BODY:
+            self._json(413, {"code": "too_large", "message": "body too large"})
+            self.close_connection = True
+            return
         try:
             body = json.loads(self.rfile.read(length) or b"{}")
         except ValueError:

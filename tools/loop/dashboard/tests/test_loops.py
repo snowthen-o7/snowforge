@@ -42,7 +42,10 @@ class DiscoverTests(unittest.TestCase):
             for folder in ("one", "two"):
                 d = Path(tmp) / folder / ".loop"; d.mkdir(parents=True)
                 (d / "config.sh").write_text('LOOP_NAME="Same"\n', encoding="utf-8")
-            self.assertEqual([l.name for l in loops.discover(Path(tmp))], ["Same", "Same-2"])
+            found = loops.discover(Path(tmp))
+            self.assertEqual([l.name for l in found], ["Same (one)", "Same (two)"])
+            for l in found:
+                self.assertIn("another loop is also named Same; shown with its folder", l.warnings)
 
 
 if __name__ == "__main__":

@@ -83,10 +83,17 @@ class ServerTests(unittest.TestCase):
         self.assertEqual((status4, out4["code"]), (400, "invalid"))
         self.assertEqual(self.post("/api/loops/beta/tasks", fields)[0], 404)
         time.sleep(0.5)
-        self.assertIn("T005", [t["id"] for t in json.loads(self.get("/api/loops")[2])["loops"][0]["queue"]])
+        alpha = next(l for l in json.loads(self.get("/api/loops")[2])["loops"] if l["name"] == "Alpha")
+        self.assertIn("T005", [t["id"] for t in alpha["queue"]])
 
     def test_sse_delivers_loop_update(self):
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        try:
+            self._sse_body(c)
+        finally:
+            c.close()
+
+    def _sse_body(self, c):
         c.request("GET", "/api/events"); r = c.getresponse()
         self.assertEqual(r.getheader("Content-Type"), "text/event-stream")
         ev_path = self.root / "alpha" / "logs" / "loop" / "events.jsonl"
@@ -101,8 +108,26 @@ class ServerTests(unittest.TestCase):
                 payload = json.loads(data[len("data: "):])
                 if payload["name"] == "Alpha" and payload["state"]["state"] == "stopped":
                     got = payload; break
-        c.close()
         self.assertIsNotNone(got); self.assertEqual(got["state"]["reason"], "gate failed after iteration 3")
+
+    def test_poll_survives_bad_event_data(self):
+        ev_path = self.root / "alpha" / "logs" / "loop" / "events.jsonl"
+        size = ev_path.stat().st_size
+        try:
+            with ev_path.open("a", encoding="utf-8", newline="\n") as f:
+                f.write(json.dumps({"ts": "not-a-timestamp", "loop": "Alpha", "run": "20261005-221100",
+                                    "event": "iteration_started", "scope": "iteration", "i": 99}) + "\n")
+            self.monitor.poll_once()  # must not raise
+            self.assertTrue(self.monitor.is_alive())
+            status, _, body = self.get("/api/loops")
+            self.assertEqual(status, 200)
+            alpha = next(l for l in json.loads(body)["loops"] if l["name"] == "Alpha")
+            self.assertTrue(any(w.startswith("poll error:") for w in alpha["warnings"])
+                            or (alpha["current"] is not None and alpha["current"]["elapsed_s"] is None))
+        finally:
+            with ev_path.open("r+b") as f:
+                f.truncate(size)
+            self.monitor.poll_once()
 
     def test_bound_to_localhost_only(self):
         self.assertEqual(self.httpd.server_address[0], "127.0.0.1")

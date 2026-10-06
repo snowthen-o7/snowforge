@@ -1,6 +1,6 @@
 import subprocess, tempfile, unittest
 from pathlib import Path
-from tools.loop.dashboard import queue
+from tools.loop.dashboard import taskqueue as queue
 
 ALPHA_TASKS = (Path(__file__).resolve().parent / "fixtures" / "root" / "alpha" / "TASKS.md").read_text(encoding="utf-8")
 FIELDS = {"id": "T005", "title": "fifth", "who": "Alex, 2026-10-05, \"go\"", "exists": "Exists: nothing.",

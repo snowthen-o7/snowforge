@@ -55,11 +55,12 @@ def discover(root: Path) -> list[Loop]:
         loops.append(Loop(name=cfg.get("LOOP_NAME") or checkout.name, path=checkout,
                           log_dir=checkout / cfg.get("LOG_DIR", "logs"), branch=branch, warnings=warnings))
     loops.sort(key=lambda l: l.name.lower())
-    seen: dict[str, int] = {}
+    counts: dict[str, int] = {}
     for loop in loops:
-        n = seen.get(loop.name, 0) + 1
-        seen[loop.name] = n
-        if n > 1:
-            loop.warnings.append(f"another loop is also named {loop.name}; shown as {loop.name}-{n}")
-            loop.name = f"{loop.name}-{n}"
+        counts[loop.name] = counts.get(loop.name, 0) + 1
+    for loop in loops:
+        if counts[loop.name] > 1:
+            loop.warnings.append(f"another loop is also named {loop.name}; shown with its folder")
+            loop.name = f"{loop.name} ({loop.path.name})"
+    loops.sort(key=lambda l: l.name.lower())
     return loops
