@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Fake `claude` for the loop kit's tests: replays a canned stream-json file instead of running a
+# session. It never calls a model. Driven by environment variables:
+#   FAKE_CLAUDE_STREAM  the stream file to print on stdout
+#   FAKE_CLAUDE_SEQ     optional: a file listing stream paths, one per line; each call consumes
+#                       the first line (and falls back to FAKE_CLAUDE_STREAM when it is empty)
+#   FAKE_CLAUDE_LOG     optional: a file this appends its argv to, so a test can assert the flags
+# A stream whose file name contains "success" also does what a real session does: marks the
+# first open task in TASKS.md done and commits. A stream named "blocked" writes docs/BLOCKED.md.
+set -e
+stream="${FAKE_CLAUDE_STREAM:-}"
+if [[ -n "${FAKE_CLAUDE_SEQ:-}" && -s "$FAKE_CLAUDE_SEQ" ]]; then
+  stream="$(head -n 1 "$FAKE_CLAUDE_SEQ")"
+  tail -n +2 "$FAKE_CLAUDE_SEQ" > "$FAKE_CLAUDE_SEQ.tmp" && mv "$FAKE_CLAUDE_SEQ.tmp" "$FAKE_CLAUDE_SEQ"
+fi
+[[ -n "${FAKE_CLAUDE_LOG:-}" ]] && printf '%s\n' "$*" >> "$FAKE_CLAUDE_LOG"
+case "$stream" in
+  *success*)
+    python - <<'EOF'
+import pathlib
+p = pathlib.Path("TASKS.md"); s = p.read_text(encoding="utf-8")
+p.write_text(s.replace("- [ ]", "- [x]", 1), encoding="utf-8", newline="\n")
+EOF
+    git add TASKS.md && git commit -q -m "fake session: task done" ;;
+  *blocked*)
+    mkdir -p docs && echo "need a key from Alex" > docs/BLOCKED.md && git add docs/BLOCKED.md && git commit -q -m "blocked" ;;
+esac
+cat "$stream"

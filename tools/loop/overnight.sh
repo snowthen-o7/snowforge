@@ -23,6 +23,13 @@ NOTIFY_TO="alexitofrancis@gmail.com"
 mkdir -p "$LOG_DIR"
 RUN_LOG="$LOG_DIR/overnight-$(date +%Y%m%d-%H%M%S).log"
 log() { echo "[$(date '+%F %T')] $*" | tee -a "$RUN_LOG"; }
+# Events for the dashboard: the run id is this log's timestamp; loop.sh inherits it and the mode.
+LOOP_RUN="${RUN_LOG##*/overnight-}"; LOOP_RUN="${LOOP_RUN%.log}"
+export LOOP_NAME LOG_DIR LOOP_RUN LOOP_MODE=overnight
+emit() { "$PYTHON" "$KIT/emit.py" "$@" || log "emit failed: $*"; }
+emit loop_started scope=run mode=overnight "max_iter=$TOTAL" "max_usd=$MAX_USD" \
+  "branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')" \
+  "kit_version=$(cat "$KIT/VERSION" 2>/dev/null || echo unknown)"
 trap 'log "SIGINT received; ignoring"' INT
 trap 'log "SIGHUP received; ignoring"' HUP
 
@@ -69,7 +76,8 @@ while (( done_iters < TOTAL )); do
         wait=1800
         log "usage limit, reset time unparsed ($msg); sleeping 30 min and retrying"
       fi
-      sleep "$wait"
+      emit usage_limit_sleep "seconds=$wait" "until=$(date -u -d "@$(( $(date +%s) + wait ))" +%FT%TZ)" "message=$msg"
+      sleep "${LOOP_TEST_SLEEP_SECONDS:-$wait}"
       ;;
     *)
       reason="loop.sh exited $rc: $(tail -n 1 "$batch_log")"
@@ -79,9 +87,15 @@ while (( done_iters < TOTAL )); do
   esac
 done
 (( done_iters >= TOTAL && rc == 0 )) && log "reached $TOTAL iterations."
-"$PYTHON" "$KIT/notify.py" --name "$LOOP_NAME" --repo "$REPO" --to "$NOTIFY_TO" \
-  --reason "$reason" --code "$rc" --iterations "$done_iters" --log-dir "$LOG_DIR" --run-log "$RUN_LOG" \
-  || log "the stop notice could not be sent (see above)"
+emit loop_stopped scope=run "code=$rc" "reason=$reason"
+notify_args=()
+[[ -n "${LOOP_NOTIFY_DRY_RUN:-}" ]] && notify_args+=(--dry-run)
+if "$PYTHON" "$KIT/notify.py" --name "$LOOP_NAME" --repo "$REPO" --to "$NOTIFY_TO" \
+  --reason "$reason" --code "$rc" --iterations "$done_iters" --log-dir "$LOG_DIR" --run-log "$RUN_LOG" "${notify_args[@]}"; then
+  emit notice_sent ok=true
+else
+  log "the stop notice could not be sent (see above)"; emit notice_sent ok=false
+fi
 return "$rc"
 }
 main "$@"; exit $?
