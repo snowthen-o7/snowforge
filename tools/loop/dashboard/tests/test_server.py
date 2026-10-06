@@ -142,6 +142,10 @@ class IndexTests(unittest.TestCase):
                        "API-equivalent", "new EventSource('/api/events')", "id=\"add-task\"", "<title>SnowForge loops</title>"):
             self.assertIn(needle, self.html, needle)
 
+    def test_no_raw_tier_interpolation(self):
+        self.assertIn('title="${esc(t)} ', self.html)
+        self.assertNotIn('title="${t} ', self.html)
+
     def test_no_external_scripts(self):
         self.assertNotIn("<script src=", self.html)
         self.assertEqual(self.html.count("<link rel=\"stylesheet\""), 1)  # the one Google Fonts link

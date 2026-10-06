@@ -10,9 +10,9 @@
   --accent:#2458C8;--run-bg:#E4ECFB;--run-fg:#1F4DB0;--ok-bg:#E3F3EA;--ok-fg:#0F6A3F;--warn-bg:#FBEFD9;--warn-fg:#8A4B06;
   --bad-bg:#FBE4E4;--bad-fg:#9B1C1C;--term-bg:#1C1C1A;--term-fg:#E8E6DF;--term-dim:#8A8984;--term-tool:#7FA4F0;--term-edit:#F0B35C;--term-gate:#7BD39A}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#161614;--surface:#1F1F1C;--ink:#ECEAE3;--dim:#A3A19A;--line:#34332F;--line-soft:#2A2926;--chip:#2A2926;
-  --run-bg:#1C2A4A;--run-fg:#9DB8F2;--ok-bg:#15301F;--ok-fg:#8FD4A8;--warn-bg:#3A2A10;--warn-fg:#F0C27A;--bad-bg:#3C1A1A;--bad-fg:#F2A3A3;--term-bg:#0E0E0D}}
+  --accent:#7FA4F0;--run-bg:#1C2A4A;--run-fg:#9DB8F2;--ok-bg:#15301F;--ok-fg:#8FD4A8;--warn-bg:#3A2A10;--warn-fg:#F0C27A;--bad-bg:#3C1A1A;--bad-fg:#F2A3A3;--term-bg:#0E0E0D}}
 :root[data-theme="dark"]{--bg:#161614;--surface:#1F1F1C;--ink:#ECEAE3;--dim:#A3A19A;--line:#34332F;--line-soft:#2A2926;--chip:#2A2926;
-  --run-bg:#1C2A4A;--run-fg:#9DB8F2;--ok-bg:#15301F;--ok-fg:#8FD4A8;--warn-bg:#3A2A10;--warn-fg:#F0C27A;--bad-bg:#3C1A1A;--bad-fg:#F2A3A3;--term-bg:#0E0E0D}
+  --accent:#7FA4F0;--run-bg:#1C2A4A;--run-fg:#9DB8F2;--ok-bg:#15301F;--ok-fg:#8FD4A8;--warn-bg:#3A2A10;--warn-fg:#F0C27A;--bad-bg:#3C1A1A;--bad-fg:#F2A3A3;--term-bg:#0E0E0D}
 :root[data-theme="light"]{--bg:#F4F4F1;--surface:#FFFFFF;--ink:#1C1C1A;--dim:#5A5955;--line:#D9D8D2;--line-soft:#ECEBE6;--chip:#EFEEE9;--term-bg:#1C1C1A}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "IBM Plex Sans",system-ui,sans-serif}
@@ -30,7 +30,7 @@ main{max-width:1440px;margin:0 auto;padding:16px;display:flex;flex-direction:col
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
 .tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
 .tile .k{font-size:12px;color:var(--dim)}.tile .v{font-size:26px;font-weight:600;line-height:1.1}.tile .v small{font-size:13px;font-weight:400;color:var(--dim)}
-.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:12px}
 .card{display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;color:inherit;text-decoration:none}
 .card:hover{border-color:var(--dim)}
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px}.wrap{display:flex;flex-wrap:wrap;gap:6px}
@@ -70,7 +70,7 @@ form.task input,form.task select,form.task textarea{border:1px solid var(--line)
   <div class="wrap" style="align-items:center">
     <span class="sub"><span class="dot off" id="dot"></span><span id="live">connecting…</span></span>
     <a class="btn" id="back" href="#" style="text-decoration:none">← All loops</a>
-    <button class="btn" id="theme" type="button" aria-label="Theme">Theme: system</button>
+    <button class="btn" id="theme" type="button">Theme: system</button>
   </div>
 </header>
 <main>
@@ -172,69 +172,91 @@ form.task input,form.task select,form.task textarea{border:1px solid var(--line)
     $('recent-sub').textContent = 'last 7 days · ' + Object.entries(byTier).map(([t, c]) => `${t} ${money(c)}`).join(' · ');
   }
 
-  function renderTail() {
+  function renderTail(err) {
     const term = $('term');
     const atBottom = term.scrollTop + term.clientHeight >= term.scrollHeight - 8;
     term.innerHTML = tail.filter((e) => showHooks || !e.hidden).map((e) => {
       const kind = ['said', 'result', 'hook', 'end', 'Edit', 'Write'].includes(e.kind) ? e.kind : 'tool';
       return `<div class="l"><span class="t">${esc(e.t)}</span><span class="k ${kind}">${esc(e.kind)}</span><span class="x${e.kind === 'result' || e.hidden ? ' dim' : ''}">${esc(e.text)}</span></div>`;
-    }).join('') + `<div class="l"><span class="t"></span><span class="k tool">live</span><span class="x dim">${paused ? `paused · ${pending.length} new` : (tail.length ? 'waiting for the next event…' : 'no lines yet (stream not found or empty)')}</span></div>`;
+    }).join('') + `<div class="l"><span class="t"></span><span class="k tool">live</span><span class="x dim">${err ? esc(err) : paused ? `paused · ${pending.length} new` : (tail.length ? 'waiting for the next event…' : 'no lines yet (stream not found or empty)')}</span></div>`;
     if (atBottom && !paused) term.scrollTop = term.scrollHeight;
   }
 
   function renderDetail() {
     const l = loops.get(selected);
-    if (!l) { $('d-name').textContent = selected; return; }
+    if (!l) {
+      $('d-name').textContent = selected; $('d-state').className = 'pill'; $('d-state').textContent = ''; $('d-branch').textContent = ''; $('d-mode').textContent = '';
+      $('d-run').textContent = 'this loop is no longer listed'; $('d-iter').textContent = 'Last session'; $('d-task').textContent = '';
+      $('queue').innerHTML = ''; $('q-head').textContent = 'Queue'; $('spend').innerHTML = ''; $('d-iters').innerHTML = ''; $('d-iters-sub').textContent = ''; $('warnings').textContent = '';
+      tail = []; renderTail(); return;
+    }
     const cur = l.current, run = l.run || {};
     $('d-name').textContent = l.name; $('d-state').className = 'pill ' + l.state.state; $('d-state').innerHTML = '<i></i>' + esc(stateLabel(l.state));
     $('d-branch').textContent = l.branch; $('d-mode').textContent = run.mode ? `${run.mode} ${run.max_iter ?? ''}` : '';
     $('d-run').textContent = `${cur ? `Iteration ${cur.i} of ${run.max_iter ?? '?'} · ` : ''}run ${money(l.totals.run.cost)}${run.started ? ' · started ' + hhmm(run.started) : ''}`;
     $('d-iter').textContent = cur ? `Live session · iteration ${cur.i} · ${cur.phase}` : 'Last session';
     $('d-task').textContent = cur ? `${cur.task} · ${cur.tier} · ${mins(cur.elapsed_s)} · ${cur.turns} messages so far` : (l.state.reason || '');
-    $('queue').innerHTML = l.queue.length ? l.queue.map((t) => `<div class="q"><span class="id mono">${esc(t.id)}</span><span class="ti">${esc(t.title)}</span><span class="pill empty">${esc(t.model || '—')}</span></div>`).join('') : '<div class="q sub">queue empty</div>';
-    $('q-head').textContent = `Queue · ${l.queue.length} open`;
+    $('queue').innerHTML = (l.queue || []).length ? (l.queue || []).map((t) => `<div class="q"><span class="id mono">${esc(t.id)}</span><span class="ti">${esc(t.title)}</span><span class="pill empty">${esc(t.model || '—')}</span></div>`).join('') : '<div class="q sub">queue empty</div>';
+    $('q-head').textContent = `Queue · ${(l.queue || []).length} open`;
     const T = l.totals, week = T.week, tiers = Object.entries(week.by_tier), per = week.count ? week.cost / week.count : 0;
-    const shades = ['var(--accent)', '#7FA4F0', '#C9D7F6', '#9AB0D8'];
+    const shades = ['var(--accent)', 'var(--dim)', 'var(--term-dim)', 'var(--line)'];
     $('spend').innerHTML = [['This run', money(T.run.cost)], ['Today', money(T.today.cost)], ['Last 7 days', money(week.cost)], ['Per iteration, 7 d', money(per)]]
       .map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')
-      + `<div style="grid-column:1/-1"><div class="k">By tier, 7 days</div><div class="bar">${tiers.map(([t, v], i) => `<span title="${t} ${money(v.cost)}" style="flex:0 0 ${week.cost ? (100 * v.cost / week.cost).toFixed(1) : 0}%;background:${shades[i % 4]}"></span>`).join('')}</div><div class="sub" style="margin-top:4px">${tiers.map(([t, v]) => `${t} ${money(v.cost)}`).join(' · ')}</div></div>`;
+      + `<div style="grid-column:1/-1"><div class="k">By tier, 7 days</div><div class="bar">${tiers.map(([t, v], i) => `<span title="${esc(t)} ${money(v.cost)}" style="flex:0 0 ${week.cost ? (100 * v.cost / week.cost).toFixed(1) : 0}%;background:${shades[i % 4]}"></span>`).join('')}</div><div class="sub" style="margin-top:4px">${tiers.map(([t, v]) => `${esc(t)} ${money(v.cost)}`).join(' · ')}</div></div>`;
     $('warnings').textContent = l.warnings.join(' · ') + (l.parse_errors ? ` · ${l.parse_errors} unreadable event line(s) skipped` : '');
-    fetch(`/api/loops/${encodeURIComponent(selected)}/iterations`).then((r) => r.json()).then((d) => {
-      const its = d.iterations.filter((it) => !run.run || it.run === run.run);
+    const name = selected;
+    fetch(`/api/loops/${encodeURIComponent(name)}/iterations`).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); }).then((d) => {
+      if (selected !== name) return;
+      const its = (d.iterations || []).filter((it) => !run.run || it.run === run.run);
       $('d-iters-sub').textContent = `${its.filter((it) => it.finished).length} finished, ${its.filter((it) => !it.finished).length} running`;
       $('d-iters').innerHTML = its.map((it) => { const g = gateOf(it); return `<tr><td class="mono">${it.i}</td><td class="sub">${hhmm(it.started)}</td><td>${esc(it.task)}</td><td>${esc(it.tier)}</td><td class="mono">${money(it.cost)}${it.finished ? '' : ' so far'}</td><td class="mono">${it.turns ?? ''}</td><td class="mono">${it.minutes ?? ''}</td><td><span class="pill ${g.c}">${g.t}</span></td><td class="mono sub">${esc(it.commit || '—')}</td></tr>`; }).join('');
-    });
+    }).catch(() => {});
   }
 
+  function render() { if (selected) renderDetail(); else renderBoard(); }
+
   function route() {
-    const m = location.hash.match(/#loop=([^&]+)/);
-    selected = m ? decodeURIComponent(m[1]) : null;
+    let next = null;
+    try { const m = location.hash.match(/#loop=([^&]+)/); next = m ? decodeURIComponent(m[1]) : null; } catch (e) { next = null; }
+    const changed = next !== selected;
+    selected = next;
     $('board').classList.toggle('hidden', !!selected); $('detail').classList.toggle('hidden', !selected); $('back').classList.toggle('hidden', !selected);
     $('title').textContent = selected ? 'SnowForge loops / ' + selected : 'SnowForge loops';
-    if (selected) {
-      tail = []; pending = []; renderDetail();
-      fetch(`/api/loops/${encodeURIComponent(selected)}/session`).then((r) => r.json()).then((d) => { tail = d.entries; renderTail(); });
-      closeForm();
-    } else renderBoard();
+    if (changed) {
+      tail = []; pending = []; closeForm();
+      if (selected) {
+        const name = selected;
+        fetch(`/api/loops/${encodeURIComponent(name)}/session`).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
+          .then((d) => { if (selected !== name) return; tail = d.entries || []; renderTail(); })
+          .catch(() => { if (selected !== name) return; tail = []; renderTail('could not load the session'); });
+      }
+    }
+    if (loops.size) render();
   }
 
   // add task
   const form = $('add-task');
   const fields = () => Object.fromEntries(new FormData(form).entries());
   const preview = () => { const f = fields(); const parts = [`- [ ] ${f.id} **${f.title}**`]; if (f.who.trim()) parts.push(`(${f.who.trim()}).`); ['exists', 'build', 'test'].forEach((k) => { const v = f[k].replace(/\s+/g, ' ').trim(); if (v) parts.push(v); }); parts.push(`model:${f.tier}`); $('preview').textContent = parts.join(' '); };
-  const closeForm = () => { form.classList.add('hidden'); $('add-msg').textContent = ''; };
+  let closeTimer = null;
+  const closeForm = () => { clearTimeout(closeTimer); form.classList.add('hidden'); $('add-msg').className = 'msg'; $('add-msg').textContent = ''; };
   $('add-toggle').onclick = () => {
-    fetch(`/api/loops/${encodeURIComponent(selected)}/queue`).then((r) => r.json()).then((d) => {
-      form.reset(); form.id.value = d.suggested_id; form.sha.value = d.sha; form.classList.remove('hidden'); preview(); form.title.focus();
-      if (!d.exists) $('add-msg').textContent = 'TASKS.md is missing in this checkout';
-    });
+    const name = selected;
+    clearTimeout(closeTimer);
+    fetch(`/api/loops/${encodeURIComponent(name)}/queue`).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); }).then((d) => {
+      if (selected !== name) return;
+      form.reset(); form.id.value = d.suggested_id || ''; form.sha.value = d.sha || ''; form.classList.remove('hidden'); preview(); form.title.focus();
+      $('add-msg').className = 'msg';
+      if (!d.exists) { $('add-msg').className = 'msg bad'; $('add-msg').textContent = 'TASKS.md is missing in this checkout'; } else $('add-msg').textContent = '';
+    }).catch(() => { if (selected !== name) return; form.classList.remove('hidden'); $('add-msg').className = 'msg bad'; $('add-msg').textContent = 'could not load the queue'; });
   };
   $('add-cancel').onclick = closeForm;
   form.addEventListener('input', preview);
   form.addEventListener('submit', (e) => {
     e.preventDefault(); const btn = form.querySelector('[type=submit]'); btn.disabled = true;
     fetch(`/api/loops/${encodeURIComponent(selected)}/tasks`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(fields())})
-      .then(async (r) => { const d = await r.json(); const m = $('add-msg'); if (r.status === 201) { m.className = 'msg ok'; m.textContent = 'Appended: ' + d.line; form.sha.value = d.sha; setTimeout(closeForm, 2500); } else { m.className = 'msg bad'; m.textContent = d.message || r.statusText; if (d.code === 'changed') fetch(`/api/loops/${encodeURIComponent(selected)}/queue`).then((x) => x.json()).then((x) => { form.sha.value = x.sha; }); } })
+      .then(async (r) => { const d = await r.json().catch(() => ({message: r.statusText})); const m = $('add-msg'); if (r.status === 201) { m.className = 'msg ok'; m.textContent = 'Appended: ' + d.line; form.sha.value = d.sha; clearTimeout(closeTimer); closeTimer = setTimeout(closeForm, 2500); } else { m.className = 'msg bad'; m.textContent = d.message || r.statusText; if (d.code === 'changed') fetch(`/api/loops/${encodeURIComponent(selected)}/queue`).then((x) => x.json()).then((x) => { form.sha.value = x.sha; }).catch(() => {}); } })
+      .catch(() => { const m = $('add-msg'); m.className = 'msg bad'; m.textContent = 'could not reach the server'; })
       .finally(() => { btn.disabled = false; });
   });
 
@@ -243,17 +265,17 @@ form.task input,form.task select,form.task textarea{border:1px solid var(--line)
   $('hooks').onclick = () => { showHooks = !showHooks; $('hooks').textContent = showHooks ? 'Hide hooks' : 'Show hooks'; renderTail(); };
 
   // data
-  const load = () => fetch('/api/loops').then((r) => r.json()).then((d) => { loops.clear(); d.loops.forEach((l) => loops.set(l.name, l)); $('root').textContent = 'local · ' + d.root; route(); });
+  const load = () => fetch('/api/loops').then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); }).then((d) => { loops.clear(); (d.loops || []).forEach((l) => loops.set(l.name, l)); $('root').textContent = 'local · ' + d.root; render(); }).catch(() => {});
   const connect = () => {
     const es = new EventSource('/api/events');
     es.onopen = () => { $('dot').className = 'dot'; $('live').textContent = 'live'; load(); };
     es.onerror = () => { $('dot').className = 'dot off'; $('live').textContent = 'reconnecting…'; };
     es.addEventListener('loop', (e) => { const snap = JSON.parse(e.data); loops.set(snap.name, snap); $('live').textContent = 'live · updated ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', second: '2-digit'}); if (selected === snap.name) renderDetail(); else if (!selected) renderBoard(); });
-    es.addEventListener('session', (e) => { const d = JSON.parse(e.data); if (d.name !== selected) return; if (d.reset) { tail = d.entries; pending = []; } else if (paused) pending.push(...d.entries); else tail = tail.concat(d.entries).slice(-300); renderTail(); });
+    es.addEventListener('session', (e) => { const d = JSON.parse(e.data); if (d.name !== selected) return; if (d.reset) { tail = d.entries; pending = []; } else if (paused) pending = pending.concat(d.entries).slice(-300); else tail = tail.concat(d.entries).slice(-300); renderTail(); });
     es.addEventListener('discovery', () => load());
   };
   window.addEventListener('hashchange', route);
-  load(); connect();
+  route(); load().catch(() => {}); connect();
 })();
 </script>
 </body>
