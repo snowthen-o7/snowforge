@@ -18,6 +18,7 @@ fresh work in progress, so the two do not collide.
 | `overnight.sh` | Batches until the total is reached; sleeps through usage limits; sends the stop notice. |
 | `launch.ps1` | Task Scheduler entry point for an unattended run. |
 | `notify.py` | Emails Alex when an overnight run stops, with why, what it did and what it cost. |
+| `heartbeat.ps1`, `heartbeat.vbs` | Every 15 minutes: emails Alex about an unattended run that died without its stop notice. |
 | `iter_log.py`, `archive_tasks.py` | Per-iteration cost line and log; moves checked task lines to `TASKS-archive.md`. |
 | `templates/` | `config.sh`, the CLAUDE.md sections (`CLAUDE-loop.md`) and a `TASKS.md` to start from. |
 
@@ -65,6 +66,11 @@ fresh work in progress, so the two do not collide.
   Sent through Resend's own sender (`onboarding@resend.dev`, which may mail only the account's owner)
   because snowforge.dev is not a verified Resend domain; verify it and set `LOOP_NOTIFY_FROM` to send
   from `loops@snowforge.dev`.
+- **A heartbeat.** The scheduled task `SnowForgeLoopHeartbeat` runs `heartbeat.ps1` every 15 minutes (through
+  `heartbeat.vbs`, so no window flashes). For every loop a scheduled task launches with `launch.ps1`, it reads the ledger:
+  a run whose launcher is gone without an exit line, or that exited without its stop notice, gets one email
+  (`<LogDir>/.heartbeat-<pid>` marks it sent). RiftMind's run died silently on 2026-10-05 and sat for two hours;
+  this is what catches that. A new unattended loop is covered as soon as its scheduled task exists.
 - **Stops that matter.** `docs/BLOCKED.md` (needs a person), an API error or expired login, the usage
   limit (slept through overnight), an empty queue.
 
