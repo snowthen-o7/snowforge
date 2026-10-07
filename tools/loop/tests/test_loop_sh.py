@@ -119,6 +119,18 @@ class LoopShTests(unittest.TestCase):
         self.assertEqual([x.suffix for x in logs], [".err", ".jsonl", ".log"])
         self.assertEqual(logs[2].read_text(encoding="utf-8"), "Done: T215 checked off and committed.\n")
 
+    def test_a_session_cannot_touch_the_global_git_config_or_keep_a_new_remote(self):
+        r = LoopRepo()
+        r.git("remote", "add", "origin", "https://example.com/someone/repo.git")
+        home_config = Path(r.tmp.name) / "home.gitconfig"
+        original = "[user]\n\tname = Alex\n"
+        home_config.write_text(original, encoding="utf-8", newline="\n")
+        p = r.run(args=("1", "25"), extra_env={"FAKE_CLAUDE_MISCHIEF": "1", "GIT_CONFIG_GLOBAL": posix(home_config)})
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(home_config.read_text(encoding="utf-8"), original)
+        self.assertEqual(r.git("remote", "get-url", "origin").strip(), "https://example.com/someone/repo.git")
+        self.assertIn("the session changed origin to git@example.com:someone/repo.git; restored", p.stdout)
+
     def test_task_text_with_quotes(self):
         r = LoopRepo()
         p = r.run(args=("2", "25"))

@@ -5,6 +5,8 @@
 #   FAKE_CLAUDE_SEQ     optional: a file listing stream paths, one per line; each call consumes
 #                       the first line (and falls back to FAKE_CLAUDE_STREAM when it is empty)
 #   FAKE_CLAUDE_LOG     optional: a file this appends its argv to, so a test can assert the flags
+#   FAKE_CLAUDE_MISCHIEF optional: when set, writes the global git config and rewrites origin, as
+#                       RiftMind T231's session did, so a test can check the fence undoes both
 # A stream whose file name contains "success" also does what a real session does: marks the
 # first open task in TASKS.md done and commits. A stream named "blocked" writes docs/BLOCKED.md.
 set -e
@@ -14,6 +16,10 @@ if [[ -n "${FAKE_CLAUDE_SEQ:-}" && -s "$FAKE_CLAUDE_SEQ" ]]; then
   tail -n +2 "$FAKE_CLAUDE_SEQ" > "$FAKE_CLAUDE_SEQ.tmp" && mv "$FAKE_CLAUDE_SEQ.tmp" "$FAKE_CLAUDE_SEQ"
 fi
 [[ -n "${FAKE_CLAUDE_LOG:-}" ]] && printf '%s\n' "$*" >> "$FAKE_CLAUDE_LOG"
+if [[ -n "${FAKE_CLAUDE_MISCHIEF:-}" ]]; then
+  git config --global credential.helper "gh auth git-credential"
+  git remote set-url origin git@example.com:someone/repo.git
+fi
 case "$stream" in
   *success*)
     "${PYTHON:-python}" - <<'EOF'

@@ -70,6 +70,12 @@ for var in DATABASE_URL DIRECT_DATABASE_URL REDIS_URL KV_URL CLERK_SECRET_KEY AN
 done
 export DOPPLER_TOKEN="loop-fenced" VERCEL_TOKEN="loop-fenced" GH_TOKEN="loop-fenced" \
   GITHUB_TOKEN="loop-fenced" NEON_API_KEY="loop-fenced" AWS_PROFILE="loop-fenced"
+# A session's git reads a copy of the global config, so a `git config --global` inside one changes
+# nothing beyond the run: RiftMind T231 (2026-10-07) wrote a broken credential.helper into
+# ~/.gitconfig while trying to push. Commits still find user.name and user.email in the copy.
+FENCED_GITCONFIG="$(pwd)/$LOG_DIR/.gitconfig-fenced"
+cp "${GIT_CONFIG_GLOBAL:-$HOME/.gitconfig}" "$FENCED_GITCONFIG" 2>/dev/null || : > "$FENCED_GITCONFIG"
+export GIT_CONFIG_GLOBAL="$FENCED_GITCONFIG"
 for pair in "${EXTRA_ENV[@]}"; do export "$pair"; done
 
 # --- the model per task ------------------------------------------------------------------------
@@ -141,6 +147,7 @@ for i in $(seq 1 "$MAX_ITER"); do
   emit iteration_started "i=$i" "task_id=$(printf '%s' "$task_line" | sed -E 's/^- \[ \] *([^ ]+).*/\1/')" \
     "task=$(printf '%s' "$task_line" | sed -E 's/^- \[ \] *//; s/\*\*//g')" \
     "model=$MODEL" "tier=$tier" "stream=$LOG_DIR/iter-$i-$ts.jsonl"
+  remote0=$(git remote get-url origin 2>/dev/null || true)
   claude -p "$PROMPT" \
     --model "$MODEL" \
     --dangerously-skip-permissions \
@@ -151,6 +158,13 @@ for i in $(seq 1 "$MAX_ITER"); do
   echo "$cost"
   # shellcheck disable=SC2046  # --kv prints space-separated key=value pairs whose values hold no spaces
   emit session_finished "i=$i" $("$PYTHON" "$KIT/iter_log.py" --kv "$LOG_DIR/iter-$i-$ts.jsonl")
+  # The remote lives in the repo's own config, which every worktree shares: a session that rewrote
+  # it (RiftMind T231 set an SSH URL there is no key for) is undone here, out loud.
+  remote1=$(git remote get-url origin 2>/dev/null || true)
+  if [ -n "$remote0" ] && [ "$remote1" != "$remote0" ]; then
+    echo "    the session changed origin to $remote1; restored $remote0"
+    git remote set-url origin "$remote0"
+  fi
 
   # An API error or an expired login does no work (RiftMind burned 25 iterations on one, 2026-09-20).
   if [[ "$cost" == *is_error* ]]; then
