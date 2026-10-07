@@ -123,3 +123,64 @@ def bootstrap_with_offset(path: Path, repo: Path, limit: int = 300) -> tuple[lis
 
 def bootstrap(path: Path, repo: Path, limit: int = 300) -> list[dict]:
     return bootstrap_with_offset(path, repo, limit)[0]
+
+
+# Live spend (2026-10-06, Alex: the dashboard showed $0.00 for an hour-old session). A session's
+# cost arrives only in its final `result` line, but every assistant message in the stream carries
+# its token usage. Tokens are weighted by Anthropic's price structure relative to a model's base
+# input price (cache read 0.1, 5-minute cache write 1.25, 1-hour cache write 2, output 5), and the
+# loop's own finished sessions turn weighted tokens into dollars per model (`Spend.rates`), so no
+# price list is kept here. The stream's output counts are partial (a message's usage is written as
+# it starts), which the calibration absorbs: it measures finished sessions the same way.
+def usage_units(usage: dict) -> float:
+    creation = usage.get("cache_creation")
+    if isinstance(creation, dict):
+        written = 1.25 * _n(creation, "ephemeral_5m_input_tokens") + 2.0 * _n(creation, "ephemeral_1h_input_tokens")
+    else:
+        written = 1.25 * _n(usage, "cache_creation_input_tokens")
+    return _n(usage, "input_tokens") + 0.1 * _n(usage, "cache_read_input_tokens") + written + 5.0 * _n(usage, "output_tokens")
+
+
+def _n(mapping: dict, key: str) -> float:
+    value = mapping.get(key)
+    return float(value) if isinstance(value, (int, float)) else 0.0
+
+
+class SessionUsage:
+    """One session's turns and weighted tokens so far, read line by line from its stream."""
+
+    def __init__(self) -> None:
+        self.by_message: dict[str, float] = {}
+        self.model: str | None = None
+
+    def feed(self, line: str) -> None:
+        try:
+            obj = json.loads(line)
+        except ValueError:
+            return
+        if not isinstance(obj, dict) or obj.get("type") != "assistant":
+            return
+        message = obj.get("message")
+        if not isinstance(message, dict) or not isinstance(message.get("usage"), dict):
+            return
+        key = str(message.get("id") or len(self.by_message))
+        # one message is several lines (a line per content block); keep its largest reading
+        self.by_message[key] = max(self.by_message.get(key, 0.0), usage_units(message["usage"]))
+        if message.get("model"):
+            self.model = str(message["model"])
+
+    @property
+    def turns(self) -> int:
+        return len(self.by_message)
+
+    @property
+    def units(self) -> float:
+        return sum(self.by_message.values())
+
+
+def session_usage(path: Path) -> SessionUsage:
+    usage = SessionUsage()
+    if path.is_file():
+        for line in split_complete(path.read_bytes())[0]:
+            usage.feed(line)
+    return usage

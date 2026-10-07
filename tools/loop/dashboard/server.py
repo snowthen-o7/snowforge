@@ -32,6 +32,7 @@ from tools.loop.dashboard import taskqueue as tasks
 from tools.loop.dashboard import tail as tailing
 
 TAIL_LIMIT = 300
+RATE_SESSIONS = 20  # finished sessions per loop that calibrate a model's dollars per weighted token
 MAX_BODY = 1 << 20
 _ROUTE = re.compile(r"^/api/loops/([^/]+)/(session|iterations|queue|tasks)$")
 
@@ -45,6 +46,7 @@ class Watch:
         self.stream: Path | None = None
         self.stream_offset = 0
         self.tail: list[dict] = []
+        self.usage = tailing.SessionUsage()  # the shown session's turns and weighted tokens so far
         self.snapshot: dict | None = None
         self.snapshot_json = ""
 
@@ -82,6 +84,7 @@ class Monitor(threading.Thread):
         self.subscribers: list[queue_mod.Queue] = []
         self._halt = threading.Event()  # not `_stop`: that name belongs to threading.Thread
         self._last_scan = 0.0
+        self._usage_cache: dict[str, tuple[float, float, str]] = {}  # stream path -> (mtime, weighted tokens, model)
         self.rescan()
 
     # --- discovery ---------------------------------------------------------------------------
@@ -142,8 +145,10 @@ class Monitor(threading.Thread):
         if wanted != w.stream:
             w.stream, w.stream_offset = wanted, 0
             w.tail = []
+            w.usage = tailing.SessionUsage()
             if wanted and wanted.is_file():
                 w.tail, w.stream_offset = tailing.bootstrap_with_offset(wanted, w.loop.path, TAIL_LIMIT)
+                w.usage = tailing.session_usage(wanted)
             self.publish("session", {"name": w.loop.name, "reset": True, "entries": w.tail})
         elif w.stream and w.stream.exists():
             with w.stream.open("rb") as handle:
@@ -152,6 +157,8 @@ class Monitor(threading.Thread):
             lines, used = tailing.split_complete(chunk)
             if used:
                 w.stream_offset += used  # advance first: a line that cannot render must not be retried forever
+                for line in lines:
+                    w.usage.feed(line)
                 stamp = dt.datetime.now().strftime("%H:%M")
                 entries = [e for line in lines for e in tailing.render_line(line, w.loop.path, stamp)]
                 if entries:
@@ -176,6 +183,31 @@ class Monitor(threading.Thread):
             return opus
         return base
 
+    def _rates(self) -> dict[str, float]:
+        """Dollars per weighted token, per model, from finished sessions across every loop: each
+        session's reported cost over its stream's weighted tokens (`tail.usage_units`), the last
+        `RATE_SESSIONS` of a loop. A stream is read once per modification time."""
+        totals: dict[str, list[float]] = {}
+        for w in list(self.watches.values()):
+            done = [it for it in ev.join_iterations(w.events) if it.get("cost_usd") and it.get("stream")]
+            for it in done[:RATE_SESSIONS]:
+                path = w.loop.path / str(it["stream"])
+                try:
+                    mtime = path.stat().st_mtime
+                except OSError:
+                    continue
+                cached = self._usage_cache.get(str(path))
+                if cached is None or cached[0] != mtime:
+                    usage = tailing.session_usage(path)
+                    cached = (mtime, usage.units, usage.model or str(it.get("model") or ""))
+                    self._usage_cache[str(path)] = cached
+                _, units, model = cached
+                if units > 0:
+                    pair = totals.setdefault(model, [0.0, 0.0])
+                    pair[0] += float(it["cost_usd"])
+                    pair[1] += units
+        return {model: cost / units for model, (cost, units) in totals.items() if units}
+
     def _snapshot(self, w: Watch, current: dict | None) -> dict:
         now = dt.datetime.now(ev.UTC)
         its = ev.join_iterations(w.events)
@@ -184,7 +216,9 @@ class Monitor(threading.Thread):
         tasks_path = w.loop.path / "TASKS.md"
         q = tasks.parse_queue(tasks_path.read_text(encoding="utf-8", errors="replace")) if tasks_path.is_file() else []
         if current:  # no elapsed here: it would change the snapshot every poll; the page counts from `started`
-            current = dict(current, turns=sum(1 for e in w.tail if e["kind"] == "said"))
+            rate = self._rates().get(w.usage.model or str(current.get("model") or ""))
+            estimate = round(w.usage.units * rate, 2) if rate else None
+            current = dict(current, turns=w.usage.turns, cost_est=estimate)
         return {"name": w.loop.name, "path": str(w.loop.path), "launched": w.loop.launched, "branch": w.loop.branch, "warnings": w.loop.warnings,
                 "parse_errors": w.parse_errors, "state": ev.derive_state(w.events, now, activity), "run": run,
                 "current": current, "totals": ev.totals(its, now, run["run"] if run else None), "queue": q,

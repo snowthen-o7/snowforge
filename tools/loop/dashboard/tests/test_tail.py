@@ -85,3 +85,24 @@ class RobustTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UsageTests(unittest.TestCase):
+    def test_units_weight_tokens_by_price_structure(self):
+        usage = {"input_tokens": 10, "cache_read_input_tokens": 1000, "output_tokens": 4,
+                 "cache_creation": {"ephemeral_5m_input_tokens": 8, "ephemeral_1h_input_tokens": 5}}
+        self.assertAlmostEqual(tail.usage_units(usage), 10 + 100 + 10 + 10 + 20)
+
+    def test_units_without_the_split_count_cache_writes_at_five_minutes(self):
+        self.assertAlmostEqual(tail.usage_units({"cache_creation_input_tokens": 4}), 5.0)
+
+    def test_a_message_split_over_lines_counts_once(self):
+        u = tail.SessionUsage()
+        msg = {"id": "m1", "model": "claude-opus-5-5", "usage": {"input_tokens": 3, "output_tokens": 1}}
+        u.feed(line({"type": "assistant", "message": dict(msg, content=[{"type": "text", "text": "a"}])}))
+        u.feed(line({"type": "assistant", "message": dict(msg, usage={"input_tokens": 3, "output_tokens": 2})}))
+        u.feed(line({"type": "user", "message": {"content": []}}))
+        u.feed("not json")
+        self.assertEqual(u.turns, 1)
+        self.assertAlmostEqual(u.units, 3 + 10)
+        self.assertEqual(u.model, "claude-opus-5-5")

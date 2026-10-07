@@ -202,9 +202,9 @@ form.task input,form.task select,form.task textarea{border:1px solid var(--line)
     const cur = l.current, run = l.run || {};
     $('d-name').textContent = l.name; $('d-state').className = 'pill ' + l.state.state; $('d-state').innerHTML = '<i></i>' + esc(stateLabel(l.state));
     $('d-branch').textContent = l.branch; $('d-mode').textContent = run.mode ? `${run.mode} ${run.max_iter ?? ''}` : '';
-    $('d-run').textContent = `${cur ? `Iteration ${cur.ordinal ?? cur.i} of ${run.max_iter ?? '?'} · ` : ''}run ${money(l.totals.run.cost)}${run.started ? ' · started ' + hhmm(run.started) : ''}`;
+    $('d-run').textContent = `${cur ? `Iteration ${cur.ordinal ?? cur.i} of ${run.max_iter ?? '?'} · ` : ''}run ${money(l.totals.run.cost)}${cur?.cost_est != null ? ` + ~${money(cur.cost_est)} running` : ''}${run.started ? ' · started ' + hhmm(run.started) : ''}`;
     $('d-iter').textContent = cur ? `Live session · iteration ${cur.ordinal ?? cur.i} · ${cur.phase}` : 'Last session';
-    $('d-task').innerHTML = cur ? `${esc(cur.task)} · ${esc(cur.tier)} · ${elapsedSpan(cur.started)} · ${esc(cur.turns)} messages so far` : esc(l.state.reason || '');
+    $('d-task').innerHTML = cur ? `${esc(cur.task)} · ${esc(cur.tier)} · ${elapsedSpan(cur.started)} · ${esc(cur.turns)} turns${cur.cost_est != null ? ` · ~${money(cur.cost_est)}` : ''} so far` : esc(l.state.reason || '');
     $('queue').innerHTML = (l.queue || []).length ? (l.queue || []).map((t) => `<div class="q"><span class="id mono">${esc(t.id)}</span><span class="ti">${esc(t.title)}</span><span class="pill empty">${esc(t.model || '—')}</span></div>`).join('') : '<div class="q sub">queue empty</div>';
     $('q-head').textContent = `Queue · ${(l.queue || []).length} open`;
     const T = l.totals, week = T.week, tiers = Object.entries(week.by_tier), per = week.count ? week.cost / week.count : 0;
@@ -214,14 +214,15 @@ form.task input,form.task select,form.task textarea{border:1px solid var(--line)
       + `<div style="grid-column:1/-1"><div class="k">By tier, 7 days</div><div class="bar">${tiers.map(([t, v], i) => `<span title="${esc(t)} ${money(v.cost)}" style="flex:0 0 ${week.cost ? (100 * v.cost / week.cost).toFixed(1) : 0}%;background:${shades[i % 4]}"></span>`).join('')}</div><div class="sub" style="margin-top:4px">${tiers.map(([t, v]) => `${esc(t)} ${money(v.cost)}`).join(' · ')}</div></div>`;
     $('warnings').textContent = l.warnings.join(' · ') + (l.parse_errors ? ` · ${l.parse_errors} unreadable event line(s) skipped` : '');
     const name = selected;
-    const iterKey = `${name}|${l.iterations_count}|${cur ? cur.i : ''}|${cur ? cur.batch : ''}|${l.current?.phase ?? ''}|${l.recent?.[0]?.gates?.length ?? 0}`;
+    const iterKey = `${name}|${l.iterations_count}|${cur ? cur.i : ''}|${cur ? cur.batch : ''}|${l.current?.phase ?? ''}|${l.recent?.[0]?.gates?.length ?? 0}|${cur?.turns ?? ''}|${cur?.cost_est ?? ''}`;
     if (iterKey === lastIterKey) return;  // the snapshot changed in some other way: the table is still right
     lastIterKey = iterKey;
     fetch(`/api/loops/${encodeURIComponent(name)}/iterations`).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); }).then((d) => {
       if (selected !== name) return;
       const its = (d.iterations || []).filter((it) => !run.run || it.run === run.run);
+      const live = (it) => !it.finished && cur && it.i === cur.i && it.batch === cur.batch;  // the running session's live turns and estimate
       $('d-iters-sub').textContent = `${its.filter((it) => it.finished).length} finished, ${its.filter((it) => !it.finished).length} running`;
-      $('d-iters').innerHTML = its.map((it) => { const g = gateOf(it); return `<tr><td class="mono">${esc(it.i)}</td><td class="sub">${hhmm(it.started)}</td><td>${esc(it.task)}</td><td>${esc(it.tier)}</td><td class="mono">${money(it.cost)}${it.finished ? '' : ' so far'}</td><td class="mono">${esc(it.turns)}</td><td class="mono">${esc(it.minutes)}</td><td><span class="pill ${g.c}">${g.t}</span></td><td class="mono sub">${esc(it.commit || '—')}</td></tr>`; }).join('');
+      $('d-iters').innerHTML = its.map((it) => { const g = gateOf(it); return `<tr><td class="mono">${esc(it.i)}</td><td class="sub">${hhmm(it.started)}</td><td>${esc(it.task)}</td><td>${esc(it.tier)}</td><td class="mono">${live(it) ? (cur.cost_est != null ? `~${money(cur.cost_est)}` : money(it.cost)) : money(it.cost)}${it.finished ? '' : ' so far'}</td><td class="mono">${esc(live(it) ? cur.turns : it.turns)}</td><td class="mono">${esc(it.minutes)}</td><td><span class="pill ${g.c}">${g.t}</span></td><td class="mono sub">${esc(it.commit || '—')}</td></tr>`; }).join('');
     }).catch(() => { if (lastIterKey === iterKey) lastIterKey = null; });
   }
 
