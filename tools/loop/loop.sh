@@ -76,6 +76,19 @@ export DOPPLER_TOKEN="loop-fenced" VERCEL_TOKEN="loop-fenced" GH_TOKEN="loop-fen
 FENCED_GITCONFIG="$(pwd)/$LOG_DIR/.gitconfig-fenced"
 cp "${GIT_CONFIG_GLOBAL:-$HOME/.gitconfig}" "$FENCED_GITCONFIG" 2>/dev/null || : > "$FENCED_GITCONFIG"
 export GIT_CONFIG_GLOBAL="$FENCED_GITCONFIG"
+# The remote lives in the repo's own config, which every worktree shares: a session that rewrote
+# it (RiftMind T231 set an SSH URL there is no key for) is undone after each session, out loud.
+# `note_remote` reads it just before a session, so a change made outside one (by the supervisor,
+# while the loop runs) is kept.
+note_remote() { ORIGIN_URL=$(git remote get-url origin 2>/dev/null || true); }
+keep_remote() {
+  local now
+  now=$(git remote get-url origin 2>/dev/null || true)
+  if [ -n "$ORIGIN_URL" ] && [ "$now" != "$ORIGIN_URL" ]; then
+    echo "    the session changed origin to $now; restored $ORIGIN_URL"
+    git remote set-url origin "$ORIGIN_URL"
+  fi
+}
 for pair in "${EXTRA_ENV[@]}"; do export "$pair"; done
 
 # --- the model per task ------------------------------------------------------------------------
@@ -147,7 +160,7 @@ for i in $(seq 1 "$MAX_ITER"); do
   emit iteration_started "i=$i" "task_id=$(printf '%s' "$task_line" | sed -E 's/^- \[ \] *([^ ]+).*/\1/')" \
     "task=$(printf '%s' "$task_line" | sed -E 's/^- \[ \] *//; s/\*\*//g')" \
     "model=$MODEL" "tier=$tier" "stream=$LOG_DIR/iter-$i-$ts.jsonl"
-  remote0=$(git remote get-url origin 2>/dev/null || true)
+  note_remote
   claude -p "$PROMPT" \
     --model "$MODEL" \
     --dangerously-skip-permissions \
@@ -158,13 +171,7 @@ for i in $(seq 1 "$MAX_ITER"); do
   echo "$cost"
   # shellcheck disable=SC2046  # --kv prints space-separated key=value pairs whose values hold no spaces
   emit session_finished "i=$i" $("$PYTHON" "$KIT/iter_log.py" --kv "$LOG_DIR/iter-$i-$ts.jsonl")
-  # The remote lives in the repo's own config, which every worktree shares: a session that rewrote
-  # it (RiftMind T231 set an SSH URL there is no key for) is undone here, out loud.
-  remote1=$(git remote get-url origin 2>/dev/null || true)
-  if [ -n "$remote0" ] && [ "$remote1" != "$remote0" ]; then
-    echo "    the session changed origin to $remote1; restored $remote0"
-    git remote set-url origin "$remote0"
-  fi
+  keep_remote
 
   # An API error or an expired login does no work (RiftMind burned 25 iterations on one, 2026-09-20).
   if [[ "$cost" == *is_error* ]]; then
@@ -184,12 +191,14 @@ for i in $(seq 1 "$MAX_ITER"); do
     if ! run_gate retry "$gate_log.retry"; then
       if [[ "$MODEL" == *haiku* || "$MODEL" == *sonnet* ]]; then
         echo "Gate failed twice on $MODEL; one Opus attempt at the same task"
+        note_remote
         claude -p "The independent gate failed twice after the last iteration on the first unchecked task in TASKS.md; its output is in $gate_log.retry. Read CLAUDE.md, fix the failure, run $GATE_WORDS in the foreground until green, check the task off if it is now done, commit, and stop." \
           --model "$(tier_model opus)" --dangerously-skip-permissions --max-budget-usd "$MAX_USD" \
           --output-format stream-json --verbose > "$LOG_DIR/iter-$i-$ts-opus.jsonl" 2> "$LOG_DIR/iter-$i-$ts-opus.err"
         "$PYTHON" "$KIT/iter_log.py" "$LOG_DIR/iter-$i-$ts-opus.jsonl" "$LOG_DIR/iter-$i-$ts-opus.err" "$LOG_DIR/iter-$i-$ts-opus.log"
         # shellcheck disable=SC2046
         emit session_finished "i=$i" attempt=opus $("$PYTHON" "$KIT/iter_log.py" --kv "$LOG_DIR/iter-$i-$ts-opus.jsonl")
+        keep_remote
         if run_gate opus "$gate_log.opus"; then
           echo "Gate passed after the Opus attempt on iteration $i"
           finish_iter true
