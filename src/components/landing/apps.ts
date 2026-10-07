@@ -20,9 +20,14 @@ export type AppEntry = {
   icon: LucideIcon
   /** Optional flag: renders the card as non-interactive with a "SOON" pill. */
   comingSoon?: boolean
+  /** Optional flag: a live app that is paused for now; renders like comingSoon with a "Parked" pill. */
+  parked?: boolean
   /** Optional status pill for a live app, e.g. "Beta". */
   badge?: string
 }
+
+/** Not linkable right now: announced but unreleased, or released and parked. */
+export const isOffline = (app: AppEntry) => Boolean(app.comingSoon || app.parked)
 
 export const APPS: AppEntry[] = [
   {
@@ -57,6 +62,7 @@ export const APPS: AppEntry[] = [
     name: 'TrueIce',
     shortDescription: 'Advanced League of Legends match history and analytics.',
     url: 'https://lol.snowforge.dev',
+    parked: true,
     color: '#06b6d4',
     icon: Swords,
   },
@@ -64,6 +70,7 @@ export const APPS: AppEntry[] = [
     name: 'SnowSports',
     shortDescription: 'Sports analytics and data visualization for stats driven fans.',
     url: 'https://sports.snowforge.dev',
+    parked: true,
     color: '#0ea5e9',
     icon: Trophy,
   },

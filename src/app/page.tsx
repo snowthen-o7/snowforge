@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { LandingHeader } from '@/components/landing/LandingHeader'
 import { LandingFooter } from '@/components/landing/LandingFooter'
-import { APPS } from '@/components/landing/apps'
+import { APPS, isOffline } from '@/components/landing/apps'
 import { POSTS } from '@/lib/posts'
 
 export const metadata: Metadata = {
@@ -110,7 +110,7 @@ export default function Home() {
             for the software rather than the writing, start here.
           </p>
           <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm">
-            {APPS.filter((a) => !a.comingSoon).map((app) => (
+            {APPS.filter((a) => !isOffline(a)).map((app) => (
               <li key={app.name}>
                 <a
                   href={app.url}

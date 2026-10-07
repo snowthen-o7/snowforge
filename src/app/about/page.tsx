@@ -70,7 +70,7 @@ export default function AboutPage() {
               <li key={app.name}>
                 <strong>
                   {app.name}
-                  {app.comingSoon ? ' (coming soon)' : app.badge ? ` (${app.badge.toLowerCase()})` : ''}.
+                  {app.comingSoon ? ' (coming soon)' : app.parked ? ' (parked)' : app.badge ? ` (${app.badge.toLowerCase()})` : ''}.
                 </strong>{' '}
                 {app.shortDescription}
               </li>

@@ -1,4 +1,4 @@
-import { APPS, type AppEntry } from './apps'
+import { APPS, isOffline, type AppEntry } from './apps'
 import { Monogram } from './Monogram'
 import { SnowDotBackground } from './SnowDotBackground'
 
@@ -9,9 +9,13 @@ function spell(n: number) {
 }
 
 function toolkitSummary() {
-  const live = APPS.filter((a) => !a.comingSoon).length
-  const soon = APPS.length - live
-  const lead = `${spell(live)} live${soon ? `, ${spell(soon).toLowerCase()} on the way` : ''}.`
+  const live = APPS.filter((a) => !isOffline(a)).length
+  const soon = APPS.filter((a) => a.comingSoon).length
+  const parked = APPS.filter((a) => a.parked).length
+  const extra = [soon ? `${spell(soon).toLowerCase()} on the way` : '', parked ? `${spell(parked).toLowerCase()} parked` : '']
+    .filter(Boolean)
+    .join(', ')
+  const lead = `${spell(live)} live${extra ? `, ${extra}` : ''}.`
   return `${lead} All of them shipped by hand.`
 }
 
@@ -52,12 +56,12 @@ function AppCard({ app }: { app: AppEntry }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="text-base font-bold text-foreground">{app.name}</h3>
-            {app.comingSoon && (
+            {isOffline(app) && (
               <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full bg-muted text-ink-dim">
-                Soon
+                {app.parked ? 'Parked' : 'Soon'}
               </span>
             )}
-            {!app.comingSoon && app.badge && (
+            {!isOffline(app) && app.badge && (
               <span
                 className="text-[9px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full text-foreground"
                 style={{ backgroundColor: `${app.color}33` }}
@@ -71,7 +75,7 @@ function AppCard({ app }: { app: AppEntry }) {
           </p>
         </div>
       </div>
-      {!app.comingSoon && (
+      {!isOffline(app) && (
         <div className="mt-4 text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">
           Launch →
         </div>
@@ -82,7 +86,7 @@ function AppCard({ app }: { app: AppEntry }) {
   const baseClass =
     'group relative block overflow-hidden rounded-2xl border border-border bg-surface p-5 transition-all'
 
-  if (app.comingSoon) {
+  if (isOffline(app)) {
     return (
       <li className="list-none">
         <div
