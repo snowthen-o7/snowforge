@@ -125,6 +125,12 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased font-sans">
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2 focus:text-foreground focus:shadow"
+        >
+          Skip to content
+        </a>
         {children}
         <Analytics />
       </body>

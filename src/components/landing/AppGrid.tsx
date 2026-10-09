@@ -57,13 +57,13 @@ function AppCard({ app }: { app: AppEntry }) {
           <div className="flex items-center gap-2">
             <h3 className="text-base font-bold text-foreground">{app.name}</h3>
             {isOffline(app) && (
-              <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full bg-muted text-ink-dim">
+              <span className="text-xs font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full bg-muted text-ink-dim">
                 {app.parked ? 'Parked' : 'Soon'}
               </span>
             )}
             {!isOffline(app) && app.badge && (
               <span
-                className="text-[9px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full text-foreground"
+                className="text-xs font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full text-foreground"
                 style={{ backgroundColor: `${app.color}33` }}
               >
                 {app.badge}

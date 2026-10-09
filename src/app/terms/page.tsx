@@ -3,7 +3,7 @@ import { LandingHeader } from '@/components/landing/LandingHeader'
 
 export default function TermsOfService() {
   return (
-    <main className="min-h-screen flex flex-col bg-background text-foreground">
+    <main id="main" className="min-h-screen flex flex-col bg-background text-foreground">
       <LandingHeader />
       <div className="mx-auto w-full max-w-4xl flex-1 py-16 px-4 sm:px-6 lg:px-8">
       <header className="mb-12">
@@ -271,7 +271,7 @@ export default function TermsOfService() {
           <div className="bg-surface p-6 rounded-lg">
             <p className="text-foreground/80">
               <strong>Email:</strong>{' '}
-              <a href="mailto:alexitofrancis@gmail.com" className="text-accent hover:text-accent/80 underline">
+              <a href="mailto:alexitofrancis@gmail.com" className="text-accent-ink hover:text-accent-ink/80 underline">
                 alexitofrancis@gmail.com
               </a>
             </p>

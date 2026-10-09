@@ -16,6 +16,7 @@
   --color-ink-dim: rgb(var(--ink-dim));
   --color-accent: rgb(var(--accent));
   --color-accent-foreground: rgb(var(--accent-foreground));
+  --color-accent-ink: rgb(var(--accent-ink));
   --color-warmth-start: rgb(var(--warmth-start));
   --color-warmth-end: rgb(var(--warmth-end));
   --color-warmth-border: rgb(var(--warmth-border));
@@ -36,6 +37,7 @@
     --ink-dim: 100 116 139;             /* slate-500 */
     --accent: 249 115 22;               /* orange-500 */
     --accent-foreground: 255 255 255;
+    --accent-ink: 194 65 12;            /* orange-700: accent as small text, 5:1 on slate-50 */
 
     /* Warmth gradient (identical in both modes) */
     --warmth-start: 251 146 60;         /* orange-400 */
@@ -67,6 +69,7 @@
     --ink-dim: 148 163 184;             /* slate-400 */
     --accent: 251 146 60;               /* orange-400 */
     --accent-foreground: 15 23 42;
+    --accent-ink: 251 146 60;           /* orange-400 reads fine on the dark background */
 
     /* Warmth gradient identical */
     --warmth-start: 251 146 60;
@@ -85,5 +88,13 @@
   body {
     background-color: rgb(var(--background));
     color: rgb(var(--foreground));
+  }
+}
+
+/* Keyboard focus is visible everywhere; the mouse keeps the hover-only cues. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid rgb(var(--accent));
+    outline-offset: 2px;
   }
 }

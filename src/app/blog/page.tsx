@@ -13,10 +13,10 @@ export const metadata: Metadata = {
 
 export default function BlogIndexPage() {
   return (
-    <main className="min-h-screen flex flex-col bg-background text-foreground">
+    <main id="main" className="min-h-screen flex flex-col bg-background text-foreground">
       <LandingHeader />
       <section className="mx-auto w-full max-w-3xl flex-1 px-6 py-20">
-        <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-dim">
+        <p className="font-mono text-xs uppercase tracking-[0.14em] text-ink-dim">
           Blog
         </p>
         <h1 className="mt-3 font-display text-4xl sm:text-5xl font-medium tracking-tight">
@@ -30,7 +30,7 @@ export default function BlogIndexPage() {
         <ul className="mt-12 space-y-8">
           {posts.map((p) => (
             <li key={p.slug} className="border-t border-border pt-8">
-              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-dim">
+              <p className="font-mono text-xs uppercase tracking-[0.14em] text-ink-dim">
                 {p.date}
               </p>
               <h2 className="mt-2 font-display text-2xl font-medium text-foreground">

@@ -28,7 +28,7 @@ export function FeaturedApp({
         }}
       >
         <div>
-          <span className="block font-mono text-[10px] uppercase tracking-[0.14em] text-accent mb-2">
+          <span className="block font-mono text-xs uppercase tracking-[0.14em] text-accent-ink mb-2">
             {label}
           </span>
           <h2 className="font-display text-3xl sm:text-4xl font-medium tracking-tight text-foreground">

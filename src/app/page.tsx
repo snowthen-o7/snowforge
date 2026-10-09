@@ -16,12 +16,12 @@ export default function Home() {
   const [lead, ...rest] = POSTS
 
   return (
-    <main className="min-h-screen flex flex-col bg-background text-foreground">
+    <main id="main" className="min-h-screen flex flex-col bg-background text-foreground">
       <LandingHeader />
 
       {/* Content-hub intro */}
       <section className="mx-auto w-full max-w-3xl px-6 pt-20 pb-4">
-        <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-dim">
+        <p className="font-mono text-xs uppercase tracking-[0.14em] text-ink-dim">
           SnowForge · Writing
         </p>
         <h1 className="mt-3 font-display text-4xl sm:text-5xl font-medium tracking-tight">
@@ -50,7 +50,7 @@ export default function Home() {
       {/* Lead article */}
       <section className="mx-auto w-full max-w-3xl px-6 pt-10">
         <Link href={`/blog/${lead.slug}`} className="group block">
-          <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-accent">
+          <p className="font-mono text-xs uppercase tracking-[0.14em] text-accent-ink">
             Latest · {lead.date}
           </p>
           <h2 className="mt-3 font-display text-3xl sm:text-4xl font-medium tracking-tight text-foreground group-hover:underline decoration-warmth-start decoration-2 underline-offset-4">
@@ -67,13 +67,13 @@ export default function Home() {
 
       {/* Article index */}
       <section className="mx-auto w-full max-w-3xl flex-1 px-6 pt-16 pb-20">
-        <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-dim">
+        <p className="font-mono text-xs uppercase tracking-[0.14em] text-ink-dim">
           All writing
         </p>
         <ul className="mt-8 space-y-8">
           {rest.map((p) => (
             <li key={p.slug} className="border-t border-border pt-8">
-              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-dim">
+              <p className="font-mono text-xs uppercase tracking-[0.14em] text-ink-dim">
                 {p.date}
               </p>
               <h3 className="mt-2 font-display text-2xl font-medium text-foreground">
@@ -98,7 +98,7 @@ export default function Home() {
       {/* Demoted: the tools behind the writing */}
       <section className="border-t border-border bg-surface px-6 py-16">
         <div className="mx-auto max-w-3xl">
-          <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-dim">
+          <p className="font-mono text-xs uppercase tracking-[0.14em] text-ink-dim">
             The tools behind the notes
           </p>
           <h2 className="mt-3 font-display text-2xl sm:text-3xl font-medium tracking-tight text-foreground">

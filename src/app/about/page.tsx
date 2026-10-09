@@ -18,10 +18,10 @@ export const metadata: Metadata = {
 
 export default function AboutPage() {
   return (
-    <main className="min-h-screen flex flex-col bg-background text-foreground">
+    <main id="main" className="min-h-screen flex flex-col bg-background text-foreground">
       <LandingHeader />
       <article className="mx-auto w-full max-w-3xl flex-1 px-6 py-20">
-        <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-dim">
+        <p className="font-mono text-xs uppercase tracking-[0.14em] text-ink-dim">
           About
         </p>
         <h1 className="mt-3 font-display text-4xl sm:text-5xl font-medium tracking-tight">

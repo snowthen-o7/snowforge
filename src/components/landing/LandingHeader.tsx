@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { NavLink } from './NavLink'
 
 export function LandingHeader() {
   return (
@@ -11,16 +12,10 @@ export function LandingHeader() {
         >
           SnowForge
         </Link>
-        <nav className="flex items-center gap-x-5 text-sm text-ink-dim">
-          <Link href="/about" className="hover:text-foreground transition-colors">
-            About
-          </Link>
-          <Link href="/blog" className="hover:text-foreground transition-colors">
-            Blog
-          </Link>
-          <Link href="/contact" className="hover:text-foreground transition-colors">
-            Contact
-          </Link>
+        <nav aria-label="Primary" className="flex items-center gap-x-4 text-sm text-ink-dim">
+          <NavLink href="/about">About</NavLink>
+          <NavLink href="/blog">Blog</NavLink>
+          <NavLink href="/contact">Contact</NavLink>
           <ThemeToggle />
         </nav>
       </div>

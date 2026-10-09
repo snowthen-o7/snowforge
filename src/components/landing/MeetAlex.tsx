@@ -27,7 +27,7 @@ export function MeetAlex() {
         </div>
 
         <div>
-          <span className="block font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim mb-3">
+          <span className="block font-mono text-xs uppercase tracking-[0.12em] text-ink-dim mb-3">
             Meet the builder
           </span>
           <h2 className="font-display text-3xl sm:text-4xl font-medium tracking-tight text-foreground">
