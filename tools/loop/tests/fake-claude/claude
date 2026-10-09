@@ -27,6 +27,8 @@ import pathlib
 p = pathlib.Path("TASKS.md"); s = p.read_text(encoding="utf-8")
 p.write_text(s.replace("- [ ]", "- [x]", 1), encoding="utf-8", newline="\n")
 EOF
+    # a code change too, unless FAKE_CLAUDE_DOCS_ONLY: a docs-only iteration skips the gate
+    [[ -z "${FAKE_CLAUDE_DOCS_ONLY:-}" ]] && { echo "x" >> work.py; git add work.py; }
     git add TASKS.md && git commit -q -m "fake session: task done" ;;
   *blocked*)
     mkdir -p docs && echo "need a key from Alex" > docs/BLOCKED.md && git add docs/BLOCKED.md && git commit -q -m "blocked" ;;

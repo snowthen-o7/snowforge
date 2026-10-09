@@ -119,9 +119,21 @@ pick_model() {
 
 PROMPT="Read CLAUDE.md, then TASKS.md. Take the first unchecked task and complete it exactly per the loop protocol in CLAUDE.md. If git status shows uncommitted changes, they are a previous iteration's partial progress on that same task (it was cut off): read them and continue from there instead of starting over. Run $GATE_WORDS in the foreground and wait for it; never background it, because this session ends when your turn ends. Check the task off in TASKS.md, commit, and stop. If blocked on something only a person can provide, write docs/BLOCKED.md, commit, and stop."
 
+docs_only() {  # true when the iteration changed nothing but docs/ and Markdown (committed or not)
+  local changed
+  changed=$( { git diff --name-only "$head0" HEAD; git status --porcelain | cut -c4-; } | sort -u | sed '/^$/d')
+  [[ -n "$changed" ]] && ! grep -qvE '^docs/|\.md$' <<<"$changed"
+}
 run_gate() {  # <attempt> <log>: runs the repo's gate and records the result
   local attempt="$1" log="$2"
   emit gate_started "i=$i" "attempt=$attempt" "log=$log"
+  # A research or bookkeeping iteration that touched only docs/ and Markdown cannot break the code,
+  # so its gate is skipped (Alex, 2026-10-09: "Any other speed improvements": ~10 min an
+  # iteration on RiftMind). GATE_DOCS_ONLY=run in .loop/config.sh keeps the gate for such a repo.
+  if [[ "${GATE_DOCS_ONLY:-skip}" == skip ]] && docs_only; then
+    echo "docs-only iteration: the gate is skipped" >"$log"
+    emit gate_finished "i=$i" "attempt=$attempt" ok=true skipped=true "log=$log"; return 0
+  fi
   if gate >"$log" 2>&1; then
     emit gate_finished "i=$i" "attempt=$attempt" ok=true "log=$log"; return 0
   fi

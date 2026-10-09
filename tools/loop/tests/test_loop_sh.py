@@ -131,6 +131,27 @@ class LoopShTests(unittest.TestCase):
         self.assertEqual(r.git("remote", "get-url", "origin").strip(), "https://example.com/someone/repo.git")
         self.assertIn("the session changed origin to git@example.com:someone/repo.git; restored", p.stdout)
 
+    def test_a_docs_only_iteration_skips_the_gate(self):
+        r = LoopRepo()
+        r.gate_fails(2)  # a gate that would fail is never run
+        r.git("add", ".loop/gate-fail")  # committed before the batch, so not this iteration's change
+        r.git("commit", "-qm", "a failing gate")
+        p = r.run(args=("1", "25"), extra_env={"FAKE_CLAUDE_DOCS_ONLY": "1"})
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        gates = [e for e in r.events() if e["event"] == "gate_finished"]
+        self.assertEqual(len(gates), 1)
+        self.assertTrue(gates[0]["ok"]); self.assertTrue(gates[0]["skipped"])
+
+    def test_gate_docs_only_run_keeps_the_gate(self):
+        r = LoopRepo()
+        with open(r.repo / ".loop" / "config.sh", "a", encoding="utf-8", newline="\n") as f:
+            f.write('GATE_DOCS_ONLY="run"\n')
+        r.git("commit", "-qam", "keep the gate")
+        p = r.run(args=("1", "25"), extra_env={"FAKE_CLAUDE_DOCS_ONLY": "1"})
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        gates = [e for e in r.events() if e["event"] == "gate_finished"]
+        self.assertNotIn("skipped", gates[0])
+
     def test_task_text_with_quotes(self):
         r = LoopRepo()
         p = r.run(args=("2", "25"))
