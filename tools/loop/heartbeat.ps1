@@ -57,7 +57,7 @@ foreach ($task in $tasks) {
   $runRel = if ($runLog) { (Join-Path $logDir $runLog.Name) -replace '\\', '/' } else { "" }
   $name = "$($task.TaskName) (heartbeat)"
   if ($DryRun) { Write-Output "[dry run] $($task.TaskName): $reason (run log $runRel)"; continue }
-  & python $notify --name $name --repo $repo --to "alexitofrancis@gmail.com" --reason $reason `
+  & python $notify --name $name --repo $repo --to "snowforgedev@gmail.com" --reason $reason `
     --code 9 --iterations 0 --log-dir $logDir --run-log $runRel
   if ($LASTEXITCODE -eq 0) {
     Set-Content -Path $marker -Value ("{0} {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $reason) -Encoding utf8
