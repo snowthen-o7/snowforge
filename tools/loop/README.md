@@ -119,3 +119,11 @@ a loop that checked its queue a moment before the append exits on "No unchecked 
   output); it now runs in `RiftMind-loop` on branch `loop`, with that data copied over with
   timestamps (`cp -rp` / robocopy: decklists are dated by file time) and the `RiftMindOvernight` and
   `RiftMindSelfplay` tasks pointed at the worktree. Merge `loop` into `main` to take its work.
+
+## Opening the PR from `loop` to `main`
+
+Write the PR body with the `pr` skill (`~/.claude/skills/pr`, from mattpocock/skills): a summary as
+pseudocode, call tree or diagram; before/after evidence; and a **Merge Danger** section naming whether
+the merge is a one-way or two-way door and its blast radius. A migration that must precede a deploy, a
+Lambda change that needs `deploy:prod`, or an env var that must exist first belongs in Merge Danger,
+not in a runbook at the bottom.
